@@ -1,0 +1,10 @@
+{
+  "qrcode.min.js": {
+    "version": "1.0.0",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js",
+    "sha256": "c541ef06327885a8415bca8df6071e14189b4855336def4f36db54bde8484f36",
+    "bytes": 19927,
+    "license": "MIT",
+    "source": "https://github.com/davidshimjs/qrcodejs"
+  }
+}

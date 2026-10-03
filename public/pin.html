@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LocalShare</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/tokens.css" />
+    <link rel="stylesheet" href="/css/reset.css" />
+    <link rel="stylesheet" href="/css/layout.css" />
+    <link rel="stylesheet" href="/css/components.css" />
+    <link rel="stylesheet" href="/css/animations.css" />
+    <link rel="stylesheet" href="/css/dark.css" />
+  </head>
+  <body>
+    <!-- PIN gate: served by the server for every HTML route until authenticated -->
+    <div id="pin-page" class="pin-page">
+      <div class="pin-container">
+        <div class="pin-logo">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 48 48"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            role="img"
+            aria-label="LocalShare"
+          >
+            <rect width="48" height="48" rx="12" fill="var(--color-accent)" />
+            <path
+              d="M14 20C14 17.7909 15.7909 16 18 16H30C32.2091 16 34 17.7909 34 20V24H36C37.1046 24 38 24.8954 38 26V34C38 35.1046 37.1046 36 36 36H12C10.8954 36 10 35.1046 10 34V26C10 24.8954 10.8954 24 12 24H14V20Z"
+              fill="white"
+            />
+            <circle cx="24" cy="29" r="2" fill="white" />
+          </svg>
+        </div>
+        <h1 class="pin-title">Enter PIN</h1>
+        <p class="pin-subtitle">This room requires a PIN to access.</p>
+        <form id="pin-form" class="pin-form">
+          <input
+            type="password"
+            id="pin-input"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="8"
+            placeholder="Enter PIN"
+            autocomplete="current-pin"
+            aria-label="PIN"
+            required
+            autofocus
+            aria-describedby="pin-error"
+          />
+          <div
+            id="pin-error"
+            class="pin-error"
+            role="alert"
+            aria-live="assertive"
+            style="display: none"
+          ></div>
+          <button type="submit" id="pin-submit" class="btn btn-primary btn-lg">Enter</button>
+        </form>
+      </div>
+    </div>
+    <script type="module" src="/js/pin.js"></script>
+  </body>
+</html>

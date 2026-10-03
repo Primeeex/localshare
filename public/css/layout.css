@@ -1,0 +1,285 @@
+/**
+ * Layout primitives for LocalShare.
+ * Mobile-first: base styles target 0-479px (phone), then min-width
+ * breakpoints 480 / 640 / 768 / 1024 / 1280 (spec 13.5).
+ */
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--header-height);
+  padding: 0 var(--space-3);
+  background: var(--color-bg-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-fast);
+}
+
+.header-logo:hover {
+  background: var(--color-accent-subtle);
+}
+
+/* h1 stays in the a11y tree, hidden visually on phones (spec 13.1: logo | room | menu) */
+.header-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+/* Room name replaces the room selector in the phone header */
+.header-room-name {
+  display: inline-block;
+  max-width: 32vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.header-center {
+  flex: 1;
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Tabs: full-width, swipeable on phones (spec 13.1) */
+.tabs {
+  display: flex;
+  gap: 0;
+  height: var(--tab-height);
+  background: var(--color-bg-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  flex: 1;
+  padding: 0 var(--space-2);
+  height: 100%;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+  border-bottom: 2px solid transparent;
+  /* WHY no transition: spec 13.6 "Tab switch: instant" (motion sickness) */
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tab:hover {
+  color: var(--color-text-primary);
+}
+
+.tab.active {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-accent);
+}
+
+/* Main content */
+.main {
+  flex: 1;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+.tab-content.active {
+  display: flex;
+}
+
+/* Status bar: hidden on phones (spec 13.1) */
+.statusbar {
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+}
+
+.status-divider {
+  color: var(--color-text-disabled);
+}
+
+/* Phone-only affordances (menu button, camera button) */
+.mobile-only {
+  display: flex;
+}
+
+/* ===== 480px: large phone ===== */
+@media (min-width: 480px) {
+  .header {
+    padding: 0 var(--space-4);
+  }
+
+  .header-title {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.02em;
+  }
+
+  .header-room-name {
+    display: none;
+  }
+
+  .header-center {
+    display: flex;
+  }
+
+  .mobile-only {
+    display: none !important;
+  }
+
+  .main {
+    padding: var(--space-4);
+  }
+
+  .statusbar {
+    display: flex;
+  }
+}
+
+/* ===== 640px: tablet portrait (spec 13.5: 24px rhythm) ===== */
+@media (min-width: 640px) {
+  .header,
+  .tabs {
+    padding-left: var(--space-6);
+    padding-right: var(--space-6);
+  }
+
+  .main {
+    padding: var(--space-6);
+  }
+}
+
+/* ===== 768px: tablet landscape ===== */
+@media (min-width: 768px) {
+  .header,
+  .tabs {
+    padding-left: var(--space-8);
+    padding-right: var(--space-8);
+  }
+
+  .main {
+    padding: var(--space-8);
+  }
+
+  /* Tabs stop filling the row once there is room */
+  .tab {
+    flex: 0 0 auto;
+    padding: 0 var(--space-4);
+  }
+}
+
+/* ===== 1024px: desktop ===== */
+@media (min-width: 1024px) {
+  #app {
+    padding: 0;
+  }
+
+  .header {
+    padding: 0 var(--space-8);
+  }
+
+  .tabs {
+    padding: 0 var(--space-8);
+  }
+
+  .main {
+    padding: var(--space-6);
+  }
+}
+
+/* ===== 1280px: large desktop (spec 13.5: no major changes) ===== */
+@media (min-width: 1280px) {
+  .header {
+    padding: 0 var(--space-10);
+  }
+
+  .tabs {
+    padding: 0 var(--space-10);
+  }
+
+  .main {
+    padding: var(--space-8);
+  }
+}

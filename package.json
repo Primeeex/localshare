@@ -1,0 +1,82 @@
+{
+  "name": "localshare",
+  "version": "1.0.0",
+  "description": "Share files between devices on the same Wi-Fi with a tiny web UI",
+  "type": "module",
+  "main": "src/server.js",
+  "bin": {
+    "localshare": "bin/localshare.js"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "file-sharing",
+    "local-network",
+    "wifi",
+    "lan",
+    "self-hosted",
+    "cli",
+    "web-ui",
+    "no-cloud",
+    "airdrop-alternative"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/localshare/localshare#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/localshare/localshare.git"
+  },
+  "bugs": {
+    "url": "https://github.com/localshare/localshare/issues"
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/localshare"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "public/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "start": "node bin/localshare.js",
+    "dev": "nodemon bin/localshare.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/ bin/ public/js/ scripts/ test/",
+    "format": "prettier --write .",
+    "vendor": "node scripts/vendor.js",
+    "release": "node scripts/release.js",
+    "prepare": "chmod +x bin/localshare.js"
+  },
+  "dependencies": {
+    "archiver": "^6.0.0",
+    "chokidar": "^3.5.3",
+    "cookie-parser": "^1.4.7",
+    "cosmiconfig": "^9.0.0",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.3",
+    "helmet": "^7.1.0",
+    "mime-types": "^2.1.35",
+    "multer": "^1.4.5-lts.1",
+    "nanoid": "^5.0.4",
+    "pino": "^8.17.1",
+    "pino-pretty": "^10.3.0",
+    "qrcode": "^1.5.3",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^1.0.4",
+    "eslint": "^8.56.0",
+    "nodemon": "^3.0.2",
+    "prettier": "^3.1.1",
+    "supertest": "^6.3.3",
+    "vitest": "^1.0.4"
+  }
+}

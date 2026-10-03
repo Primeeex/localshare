@@ -1,0 +1,13 @@
+# The specification file is given, not authored here
+PROMPT.md
+
+# Build and dependency output
+node_modules/
+coverage/
+*.tgz
+
+# Vendored third party code is pinned verbatim by scripts/vendor.js
+public/vendor/
+
+# Binary assets
+docs/screenshots/

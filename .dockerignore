@@ -1,0 +1,15 @@
+node_modules/
+uploads/
+coverage/
+.git/
+.github/
+docs/screenshots/
+test/
+.gitignore
+.npmignore
+.editorconfig
+.eslintrc.json
+.prettierrc
+localshare.config.json
+*.local
+.DS_Store

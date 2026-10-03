@@ -1,0 +1,6 @@
+# LocalShare
+node_modules/
+uploads/
+coverage/
+.DS_Store
+*.local

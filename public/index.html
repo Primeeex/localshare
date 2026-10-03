@@ -1,0 +1,1022 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LocalShare</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/tokens.css" />
+    <link rel="stylesheet" href="/css/reset.css" />
+    <link rel="stylesheet" href="/css/layout.css" />
+    <link rel="stylesheet" href="/css/components.css" />
+    <link rel="stylesheet" href="/css/animations.css" />
+    <link rel="stylesheet" href="/css/dark.css" />
+    <style>
+      /* Inline critical CSS to prevent flash of wrong theme */
+      html[data-theme="light"] {
+        --theme: light;
+      }
+      html[data-theme="dark"] {
+        --theme: dark;
+      }
+      html[data-theme="system"] {
+        --theme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        html[data-theme="system"] {
+          --theme: dark;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a href="#main" class="skip-link">Skip to content</a>
+
+    <!-- Main App -->
+    <div id="app" style="display: none">
+      <!-- Drag Drop Overlay -->
+      <div id="drop-overlay" class="drop-overlay drop-overlay--inactive" aria-hidden="true">
+        <div class="drop-overlay-content">
+          <svg
+            class="drop-overlay-icon"
+            width="48"
+            height="48"
+            viewBox="0 0 48 48"
+            fill="none"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              d="M24 32V12M24 12L18 18M24 12L30 18"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M8 32V38C8 39.1046 8.89543 40 10 40H38C39.1046 40 40 39.1046 40 38V32"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+            />
+          </svg>
+          <span>Drop to upload</span>
+        </div>
+      </div>
+
+      <!-- Header -->
+      <header class="header">
+        <div class="header-left">
+          <a href="#" class="header-logo" aria-label="LocalShare home">
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 48 48"
+              fill="none"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <rect width="48" height="48" rx="12" fill="var(--color-accent)" />
+              <path
+                d="M14 20C14 17.7909 15.7909 16 18 16H30C32.2091 16 34 17.7909 34 20V24H36C37.1046 24 38 24.8954 38 26V34C38 35.1046 37.1046 36 36 36H12C10.8954 36 10 35.1046 10 34V26C10 24.8954 10.8954 24 12 24H14V20Z"
+                fill="white"
+              />
+              <circle cx="24" cy="29" r="2" fill="white" />
+            </svg>
+            <h1 class="header-title">LocalShare</h1>
+          </a>
+          <span id="header-room-name" class="header-room-name">default</span>
+        </div>
+        <div class="header-center">
+          <select id="room-selector" class="select" aria-label="Select room">
+            <option value="default">Default Room</option>
+          </select>
+          <button
+            id="new-room-btn"
+            class="btn btn-ghost btn-sm"
+            aria-label="Create new room"
+            title="Create new room"
+          >
+            +
+          </button>
+        </div>
+        <div class="header-right">
+          <div
+            id="device-avatars"
+            class="device-avatars"
+            role="group"
+            aria-label="Connected devices"
+          ></div>
+          <button
+            id="theme-toggle"
+            class="btn btn-ghost btn-icon"
+            aria-label="Toggle theme"
+            title="Toggle theme"
+          >
+            <svg
+              class="icon-sun"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="12" cy="12" r="5" />
+              <line x1="12" y1="1" x2="12" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="23" />
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+              <line x1="1" y1="12" x2="3" y2="12" />
+              <line x1="21" y1="12" x2="23" y2="12" />
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+            </svg>
+            <svg
+              class="icon-moon"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              style="display: none"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+          </button>
+          <button id="qr-btn" class="btn btn-ghost btn-sm" aria-label="Show QR code">QR</button>
+          <button
+            id="menu-btn"
+            class="btn btn-ghost btn-icon mobile-only"
+            aria-label="Open menu"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+            aria-controls="menu-sheet"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Tabs -->
+      <div class="tabs" role="tablist" aria-label="Sections">
+        <button
+          id="tab-btn-files"
+          class="tab active"
+          role="tab"
+          aria-selected="true"
+          aria-controls="tab-files"
+          tabindex="0"
+          data-tab="files"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          </svg>
+          Files
+        </button>
+        <button
+          id="tab-btn-text"
+          class="tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="tab-text"
+          tabindex="-1"
+          data-tab="text"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+          Text
+        </button>
+        <button
+          id="tab-btn-clipboard"
+          class="tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="tab-clipboard"
+          tabindex="-1"
+          data-tab="clipboard"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+          </svg>
+          Clipboard
+        </button>
+        <button
+          id="tab-btn-devices"
+          class="tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="tab-devices"
+          tabindex="-1"
+          data-tab="devices"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+          Devices
+        </button>
+      </div>
+
+      <!-- Main Content -->
+      <main class="main" id="main">
+        <!-- Files Tab -->
+        <section
+          id="tab-files"
+          class="tab-content active"
+          role="tabpanel"
+          aria-labelledby="tab-btn-files"
+          tabindex="0"
+        >
+          <!-- Upload Zone -->
+          <div
+            class="upload-zone"
+            id="upload-zone"
+            tabindex="0"
+            role="button"
+            aria-label="Upload files. Press Enter to open file picker."
+          >
+            <input type="file" id="file-input" multiple hidden />
+            <input
+              type="file"
+              id="camera-input"
+              accept="image/*,video/*"
+              capture="environment"
+              hidden
+            />
+            <div class="upload-zone-content">
+              <svg
+                class="upload-icon"
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <p class="upload-text">Drop files here or click to upload</p>
+              <div class="upload-actions">
+                <button class="btn btn-secondary btn-sm" id="upload-btn">Choose Files</button>
+                <button class="btn btn-secondary btn-sm mobile-only" id="camera-btn">
+                  Take Photo
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Upload Queue -->
+          <div id="upload-queue" class="upload-queue" style="display: none"></div>
+
+          <!-- File List Header -->
+          <div class="file-list-header">
+            <h2 class="file-list-title">Files</h2>
+            <label class="sr-only" for="file-search">Search files</label>
+            <input
+              type="search"
+              id="file-search"
+              class="input input-search"
+              placeholder="Search files"
+              autocomplete="off"
+            />
+            <button id="download-all-btn" class="btn btn-primary btn-sm" disabled>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Download All
+            </button>
+          </div>
+
+          <!-- File List -->
+          <div
+            id="file-list"
+            class="file-list"
+            role="list"
+            aria-label="Uploaded files"
+            aria-live="polite"
+            aria-relevant="additions text"
+          >
+            <!-- Empty state -->
+            <div class="empty-state" id="file-empty">
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="opacity: 0.4"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                />
+              </svg>
+              <p>No files yet</p>
+              <p class="empty-sub">Drag files here or click "Upload" to get started</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Text Tab -->
+        <section
+          id="tab-text"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-btn-text"
+          tabindex="0"
+          style="display: none"
+        >
+          <div class="text-share">
+            <label for="text-content" class="sr-only">Share text</label>
+            <textarea
+              id="text-content"
+              class="textarea"
+              rows="6"
+              maxlength="100000"
+              placeholder="Type or paste text to share..."
+            ></textarea>
+            <div class="text-share-footer">
+              <label for="text-label" class="sr-only">Label (optional)</label>
+              <input
+                type="text"
+                id="text-label"
+                class="input"
+                placeholder="Label (optional)"
+                maxlength="64"
+              />
+              <button id="share-text-btn" class="btn btn-primary">Share Text</button>
+            </div>
+          </div>
+          <div class="text-list-header">
+            <h2 class="file-list-title">Shared Text</h2>
+          </div>
+          <div
+            id="text-list"
+            class="text-list"
+            role="list"
+            aria-live="polite"
+            aria-relevant="additions text"
+          >
+            <div class="empty-state" id="text-empty">
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="opacity: 0.4"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <p>Nothing shared yet</p>
+              <p class="empty-sub">Type something above and click "Share Text"</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Clipboard Tab -->
+        <section
+          id="tab-clipboard"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-btn-clipboard"
+          tabindex="0"
+          style="display: none"
+        >
+          <div class="clipboard-settings" id="clipboard-settings">
+            <label class="toggle">
+              <input type="checkbox" id="clipboard-sync-toggle" />
+              <span class="toggle-label">Enable clipboard sync</span>
+            </label>
+            <p class="toggle-desc">
+              When enabled, copied text will be shared with other devices in the room.
+            </p>
+          </div>
+          <div class="text-list-header">
+            <h2 class="file-list-title">Clipboard History</h2>
+          </div>
+          <div
+            id="clipboard-list"
+            class="text-list"
+            role="list"
+            aria-live="polite"
+            aria-relevant="additions text"
+          >
+            <div class="empty-state" id="clipboard-empty">
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="opacity: 0.4"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+                />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+              </svg>
+              <p>Clipboard is empty</p>
+              <p class="empty-sub">Enable clipboard sync to share copied text across devices</p>
+              <button class="btn btn-ghost btn-sm" id="clipboard-settings-btn">Settings</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Devices Tab -->
+        <section
+          id="tab-devices"
+          class="tab-content"
+          role="tabpanel"
+          aria-labelledby="tab-btn-devices"
+          tabindex="0"
+          style="display: none"
+        >
+          <h2 class="sr-only">Devices</h2>
+          <div
+            class="device-list"
+            id="device-list"
+            role="list"
+            aria-live="polite"
+            aria-relevant="additions text"
+          >
+            <div class="empty-state" id="device-empty">
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="opacity: 0.4"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
+              <p>Only you here</p>
+              <p class="empty-sub">Scan the QR code or open this URL on another device</p>
+              <button class="btn btn-secondary" id="device-qr-btn">Show QR Code</button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Status Bar -->
+      <footer class="statusbar" id="statusbar">
+        <span id="status-files">0 files</span>
+        <span class="status-divider" aria-hidden="true">|</span>
+        <span id="status-size">0 B</span>
+        <span class="status-divider" aria-hidden="true">|</span>
+        <span id="status-devices">0 devices</span>
+        <span class="status-divider" aria-hidden="true">|</span>
+        <span id="status-uptime">0s</span>
+      </footer>
+
+      <!-- Toast Container -->
+      <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+      <!-- Modals -->
+      <!-- QR Modal -->
+      <div
+        id="qr-modal"
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="QR code"
+        style="display: none"
+      >
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-qr">
+          <div class="modal-header">
+            <h3 class="modal-title">Open on Phone</h3>
+            <button class="modal-close" aria-label="Close modal">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div id="qr-code-container" class="qr-container">
+              <div
+                id="qr-code"
+                class="qr-code"
+                role="img"
+                aria-label="QR code linking to this LocalShare instance"
+              ></div>
+            </div>
+            <div class="url-row">
+              <code id="qr-url" class="url-code"></code>
+              <button class="btn btn-ghost btn-sm" id="copy-url-btn">Copy</button>
+            </div>
+            <label class="sr-only" for="qr-ip-select">IP address for the QR code</label>
+            <select id="qr-ip-select" class="select" style="margin-top: 12px"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preview Modal -->
+      <div
+        id="preview-modal"
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="File preview"
+        style="display: none"
+      >
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-preview">
+          <div class="modal-header">
+            <div>
+              <h3 id="preview-filename" class="modal-title modal-filename"></h3>
+              <p id="preview-meta" class="preview-meta"></p>
+            </div>
+            <button class="modal-close" aria-label="Close preview">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <div id="preview-content" class="modal-body preview-content"></div>
+          <div class="modal-footer">
+            <button id="preview-send" class="btn btn-secondary">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+              Send to...
+            </button>
+            <button id="preview-download" class="btn btn-primary">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Download
+            </button>
+            <button id="preview-delete" class="btn btn-danger">Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transfer Modal -->
+      <div
+        id="transfer-modal"
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Incoming transfer"
+        style="display: none"
+      >
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-transfer">
+          <div class="modal-header">
+            <h3 class="modal-title">Incoming Transfer</h3>
+          </div>
+          <div class="modal-body">
+            <p id="transfer-message"></p>
+            <div id="transfer-file-info" class="transfer-file-info"></div>
+          </div>
+          <div class="modal-footer">
+            <button id="transfer-decline" class="btn btn-secondary">Decline</button>
+            <button id="transfer-accept" class="btn btn-primary">Accept</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Paste to Share Modal -->
+      <div
+        id="paste-modal"
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Paste to share"
+        style="display: none"
+      >
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-sm">
+          <div class="modal-header">
+            <h3 class="modal-title">Paste to Share</h3>
+            <button class="modal-close" aria-label="Close modal">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <label for="paste-content" class="sr-only">Pasted text</label>
+            <textarea
+              id="paste-content"
+              class="textarea"
+              rows="6"
+              maxlength="100000"
+              placeholder="Pasted text appears here..."
+            ></textarea>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" data-close-paste>Cancel</button>
+            <button id="paste-share-btn" class="btn btn-primary">Share</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Keyboard Shortcuts Modal -->
+      <div
+        id="shortcuts-modal"
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Keyboard shortcuts"
+        style="display: none"
+      >
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-shortcuts">
+          <div class="modal-header">
+            <h3 class="modal-title">Keyboard Shortcuts</h3>
+            <button class="modal-close" aria-label="Close modal">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <table class="shortcuts-table">
+              <tbody>
+                <tr>
+                  <td><kbd>U</kbd></td>
+                  <td>Open file upload</td>
+                </tr>
+                <tr>
+                  <td><kbd>T</kbd></td>
+                  <td>Switch to Text tab</td>
+                </tr>
+                <tr>
+                  <td><kbd>F</kbd></td>
+                  <td>Switch to Files tab</td>
+                </tr>
+                <tr>
+                  <td><kbd>C</kbd></td>
+                  <td>Switch to Clipboard tab</td>
+                </tr>
+                <tr>
+                  <td><kbd>D</kbd></td>
+                  <td>Switch to Devices tab</td>
+                </tr>
+                <tr>
+                  <td><kbd>/</kbd></td>
+                  <td>Focus search bar</td>
+                </tr>
+                <tr>
+                  <td><kbd>Esc</kbd></td>
+                  <td>Close modal or menu</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl+V</kbd></td>
+                  <td>Paste to share</td>
+                </tr>
+                <tr>
+                  <td><kbd>?</kbd></td>
+                  <td>Show this help</td>
+                </tr>
+                <tr>
+                  <td><kbd>J</kbd> / <kbd>K</kbd></td>
+                  <td>Navigate file list up/down</td>
+                </tr>
+                <tr>
+                  <td><kbd>Enter</kbd></td>
+                  <td>Preview selected file</td>
+                </tr>
+                <tr>
+                  <td><kbd>Backspace</kbd></td>
+                  <td>Delete selected file</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl+D</kbd></td>
+                  <td>Download selected file</td>
+                </tr>
+                <tr>
+                  <td><kbd>Q</kbd></td>
+                  <td>Open QR code</td>
+                </tr>
+                <tr>
+                  <td><kbd>N</kbd></td>
+                  <td>New room</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- New Room Modal -->
+      <div
+        id="new-room-modal"
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Create new room"
+        style="display: none"
+      >
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-sm">
+          <div class="modal-header">
+            <h3 class="modal-title">Create New Room</h3>
+            <button class="modal-close" aria-label="Close modal">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <label for="new-room-name" class="form-label">Room Name</label>
+            <input
+              type="text"
+              id="new-room-name"
+              class="input"
+              placeholder="Optional name"
+              maxlength="32"
+            />
+            <label for="new-room-pin" class="form-label" style="margin-top: 12px"
+              >PIN (optional)</label
+            >
+            <input
+              type="password"
+              id="new-room-pin"
+              class="input"
+              placeholder="4-8 digits"
+              maxlength="8"
+              inputmode="numeric"
+              pattern="[0-9]*"
+            />
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" data-close-modal>Create</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Menu Bottom Sheet -->
+      <div
+        id="menu-sheet"
+        class="bottom-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
+        style="display: none"
+      >
+        <div class="bottom-sheet-backdrop"></div>
+        <div class="bottom-sheet-panel">
+          <div class="bottom-sheet-handle" aria-hidden="true"></div>
+          <h2 class="bottom-sheet-title">Menu</h2>
+          <button id="sheet-theme-btn" class="bottom-sheet-item" type="button">
+            Theme: <span id="sheet-theme-value">System</span>
+          </button>
+          <button id="sheet-qr-btn" class="bottom-sheet-item" type="button">QR code</button>
+          <label for="sheet-room-select" class="bottom-sheet-item bottom-sheet-select-label"
+            >Room</label
+          >
+          <select id="sheet-room-select" class="select" aria-label="Select room">
+            <option value="default">Default Room</option>
+          </select>
+          <button id="sheet-settings-btn" class="bottom-sheet-item" type="button">Settings</button>
+        </div>
+      </div>
+
+      <!-- Reconnecting Banner -->
+      <div id="reconnect-banner" class="reconnect-banner" style="display: none" role="alert">
+        <span>Reconnecting...</span>
+        <div class="reconnect-progress"><div class="reconnect-progress-bar"></div></div>
+      </div>
+
+      <!-- Disconnected Overlay -->
+      <div
+        id="disconnected-overlay"
+        class="disconnected-overlay"
+        style="display: none"
+        role="alert"
+      >
+        <div class="disconnected-content">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <path
+              d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+            />
+          </svg>
+          <h2>Connection lost</h2>
+          <p>Reconnecting in <span id="reconnect-timer">3</span>s...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vendored QR library (spec 6.6: QR rendered client-side) -->
+    <script src="/vendor/qrcode.min.js"></script>
+    <!-- App modules -->
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>

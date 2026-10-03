@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="LocalShare">
+  <title>LocalShare</title>
+  <!-- LocalShare mark: two devices exchanging data over a local network -->
+  <rect x="8" y="8" width="80" height="80" rx="22" fill="#2563EB" />
+  <!-- Monochrome usage: set both arrow fills to #FFFFFF -->
+  <path d="M7 0 L14 9 H10 V26 H4 V9 H0 Z" fill="#FFFFFF" transform="translate(29 35)" />
+  <path d="M7 0 L14 9 H10 V26 H4 V9 H0 Z" fill="#FFFFFF" fill-opacity="0.72" transform="translate(67 61) rotate(180)" />
+</svg>
