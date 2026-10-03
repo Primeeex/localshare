@@ -61,6 +61,12 @@ a {
   text-decoration: none;
 }
 
+/* Spec 13.3: never bold (700) in the UI, strongest weight is semibold 600 */
+strong,
+b {
+  font-weight: var(--weight-semibold);
+}
+
 ul,
 ol {
   list-style: none;

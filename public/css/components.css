@@ -1460,6 +1460,10 @@ kbd {
     min-height: 44px;
   }
 
+  .toggle {
+    min-height: 44px;
+  }
+
   .toggle input {
     width: 51px;
     height: 31px;
