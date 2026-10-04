@@ -140,7 +140,7 @@ export function previewFile(file, roomId, actions = {}) {
   const previewUrl = API.fileUrl(roomId, file.id, "preview");
   const downloadUrl = API.fileUrl(roomId, file.id, "download");
 
-  content.innerHTML = '<p style="color:var(--color-text-secondary)">Loading preview...</p>';
+  content.innerHTML = '<p style="color:var(--color-text-secondary)">Loading preview…</p>';
 
   const renderPreview = () => {
     if (type === "image") {

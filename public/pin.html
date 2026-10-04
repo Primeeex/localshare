@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LocalShare</title>
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -17,6 +19,18 @@
     <link rel="stylesheet" href="/css/components.css" />
     <link rel="stylesheet" href="/css/animations.css" />
     <link rel="stylesheet" href="/css/dark.css" />
+    <script>
+      /* Spec 6.10: apply the stored theme before first paint to prevent a flash
+         of the wrong theme. WHY allowed by script-src 'self': the exact bytes
+         of this script are SHA-256 allowlisted in src/server.js; keep in sync
+         (guarded by test/integration/text.test.js). */
+      try {
+        var t = localStorage.getItem("localshare:theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch (e) {
+        /* Storage unavailable: keep data-theme="system" + CSS media fallback */
+      }
+    </script>
   </head>
   <body>
     <!-- PIN gate: served by the server for every HTML route until authenticated -->

@@ -594,7 +594,7 @@ async function sendToDevice(file, anchor) {
             targetDeviceId: d.id,
           });
           toast.show(
-            `Sent ${file.originalName} to ${d.name || "device"}. Awaiting acceptance...`,
+            `Sent ${file.originalName} to ${d.name || "device"}. Awaiting acceptance…`,
             "info"
           );
         } catch (err) {
@@ -765,7 +765,7 @@ function bindDownloadAll() {
     btn.setAttribute("aria-busy", "true");
     btn.innerHTML = "Preparing download...";
     window.location.href = API.zipUrl(state.roomId);
-    toast.show("Download starting...", "info");
+    toast.show("Download starting…", "info");
     setTimeout(() => {
       btn.classList.remove("loading");
       btn.removeAttribute("aria-busy");
@@ -1132,7 +1132,7 @@ function showTransferModal(transfer) {
     try {
       await API.respondTransfer(state.roomId, transfer.id, "accept");
       closeModals();
-      toast.show("Download starting...", "success");
+      toast.show("Download starting…", "success");
       window.location.href = API.transferUrl(state.roomId, transfer.id);
     } catch (err) {
       toast.show(err.message, "error");
@@ -1150,14 +1150,26 @@ function showTransferModal(transfer) {
 }
 
 function showShutdownBanner(data) {
-  toast.show(data.message || "Server shutting down...", "warning", { duration: 5000 });
+  toast.show(data.message || "Server shutting down…", "warning", { duration: 5000 });
 }
 
 // ===== Theme =====
+function effectiveTheme(theme) {
+  if (theme === "system") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return theme;
+}
+
 function applyStoredTheme() {
   const theme = localStorage.getItem("localshare:theme") || "system";
   document.documentElement.dataset.theme = theme;
   updateThemeIcon(theme);
+  syncThemeColor(theme);
+  // Keep the icon honest when the OS flips while the stored pref is "system"
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    updateThemeIcon(document.documentElement.dataset.theme || "system");
+  });
 }
 
 function toggleTheme() {
@@ -1167,18 +1179,33 @@ function toggleTheme() {
   document.documentElement.dataset.theme = next;
   localStorage.setItem("localshare:theme", next);
   updateThemeIcon(next);
+  syncThemeColor(next);
+}
+
+/* Browser chrome tint follows the effective theme. The media-scoped metas in
+   index.html cover "system" with no JS (and track the OS live); an explicit
+   light/dark pref overrides both of them until "system" is selected again. */
+function syncThemeColor(theme) {
+  const metas = document.querySelectorAll('meta[name="theme-color"]');
+  if (!metas.length) return;
+  const effective = effectiveTheme(theme);
+  const colors = ["#f7f7f8", "#09090b"]; // light, dark (spec 13.2 tokens)
+  metas.forEach((meta, i) => {
+    if (theme === "system") {
+      meta.setAttribute("media", `(prefers-color-scheme: ${i === 0 ? "light" : "dark"})`);
+      meta.setAttribute("content", colors[i]);
+    } else {
+      meta.removeAttribute("media");
+      meta.setAttribute("content", effective === "dark" ? colors[1] : colors[0]);
+    }
+  });
 }
 
 function updateThemeIcon(theme) {
   const sun = document.querySelector(".icon-sun");
   const moon = document.querySelector(".icon-moon");
   if (!sun || !moon) return;
-  const effective =
-    theme === "system"
-      ? window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light"
-      : theme;
+  const effective = effectiveTheme(theme);
   sun.style.display = effective === "dark" ? "none" : "block";
   moon.style.display = effective === "dark" ? "block" : "none";
 }

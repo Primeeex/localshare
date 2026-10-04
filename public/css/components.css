@@ -172,7 +172,10 @@
   padding: var(--space-10) var(--space-6);
   text-align: center;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  /* WHY explicit list: never transition:all (perf/jank + animating layout) */
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
   background: var(--color-bg-surface);
 }
 
@@ -319,6 +322,8 @@
   font-size: var(--text-xs);
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
+  /* Sizes/times must not jitter as they change */
+  font-variant-numeric: tabular-nums;
 }
 
 .file-actions {
@@ -346,7 +351,9 @@
   padding: var(--space-1);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .file-action-btn:hover {
@@ -755,6 +762,8 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
+  /* Keep scroll chained inside the dialog, never the page behind it */
+  overscroll-behavior: contain;
 }
 
 .modal-backdrop {
@@ -807,7 +816,9 @@
   padding: var(--space-1);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .modal-close:hover {
@@ -818,6 +829,7 @@
 .modal-body {
   padding: var(--space-6);
   overflow-y: auto;
+  overscroll-behavior: contain;
   flex: 1;
 }
 
@@ -1244,6 +1256,8 @@ kbd {
 .disconnected-content p {
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
+  /* Countdown digits (#reconnect-timer) must not shift width while ticking */
+  font-variant-numeric: tabular-nums;
 }
 
 /* ===== Accessibility: Reduced Motion ===== */
@@ -1383,6 +1397,7 @@ kbd {
   padding: var(--space-3) var(--space-4) var(--space-6);
   max-height: 80vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   animation: slide-up 150ms ease-out;
 }
 

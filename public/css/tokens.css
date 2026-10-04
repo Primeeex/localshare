@@ -4,6 +4,10 @@
  */
 
 :root {
+  /* Native UI (scrollbars, form controls) follows the light palette unless a
+     dark selector below overrides it, even when the OS prefers dark */
+  color-scheme: light;
+
   /* Colors - Light Mode */
   --color-bg-base: #f7f7f8;
   --color-bg-surface: #ffffff;

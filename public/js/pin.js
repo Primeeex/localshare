@@ -83,4 +83,12 @@ form.addEventListener("submit", async (event) => {
 function applyStoredTheme() {
   const theme = localStorage.getItem("localshare:theme") || "system";
   document.documentElement.dataset.theme = theme;
+  // Explicit light/dark pref overrides the static media-scoped theme-color metas
+  if (theme !== "system") {
+    const color = theme === "dark" ? "#09090b" : "#f7f7f8";
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      meta.removeAttribute("media");
+      meta.setAttribute("content", color);
+    });
+  }
 }

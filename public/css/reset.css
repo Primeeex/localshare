@@ -67,6 +67,24 @@ b {
   font-weight: var(--weight-semibold);
 }
 
+/* Wrapped headings balance across lines instead of leaving one orphan word */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+/* Touch: kill the 300ms double-tap zoom delay and flash a deliberate,
+   on-brand tap highlight instead of the UA default gray */
+a,
+button,
+[role="button"],
+[role="tab"],
+[role="menuitem"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(37, 99, 235, 0.14);
+}
+
 ul,
 ol {
   list-style: none;

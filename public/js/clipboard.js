@@ -10,8 +10,7 @@ export function renderClipboardEntry(entry, actions = {}) {
   el.className = "text-entry";
   el.setAttribute("role", "listitem");
 
-  const preview =
-    entry.content.length > 600 ? entry.content.slice(0, 600) + "\n..." : entry.content;
+  const preview = entry.content.length > 600 ? entry.content.slice(0, 600) + "\n…" : entry.content;
 
   el.innerHTML = `
     <div class="text-entry-header">

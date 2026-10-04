@@ -4,6 +4,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";
+import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { createTestApp } from "../helpers/app.js";
 
 describe("text", () => {
@@ -286,5 +288,19 @@ describe("server API", () => {
     const res = await request(harness.app).get("/api/server/health");
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
     expect(res.headers["content-security-policy"]).toContain("default-src 'self'");
+  });
+
+  it("CSP hash-allowlists the spec 6.10 inline theme script exactly", async () => {
+    const res = await request(harness.app).get("/api/server/health");
+    const csp = res.headers["content-security-policy"];
+    for (const file of ["public/index.html", "public/pin.html"]) {
+      const html = await readFile(new URL(`../../${file}`, import.meta.url), "utf8");
+      const match = html.match(/<script>([\s\S]*?)<\/script>/);
+      expect(match, `no inline <script> in ${file}`).toBeTruthy();
+      const hash = createHash("sha256").update(match[1], "utf8").digest("base64");
+      expect(csp, `${file} inline script hash missing from CSP`).toContain(`'sha256-${hash}'`);
+    }
+    // No escape hatches: the spec forbids unsafe-inline for scripts
+    expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/);
   });
 });

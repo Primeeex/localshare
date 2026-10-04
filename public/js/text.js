@@ -27,7 +27,7 @@ export function renderTextEntry(entry, actions = {}) {
 
   const isCode = looksLikeCode(entry.content);
   const preview =
-    entry.content.length > 1200 ? entry.content.slice(0, 1200) + "\n..." : entry.content;
+    entry.content.length > 1200 ? entry.content.slice(0, 1200) + "\n…" : entry.content;
 
   el.innerHTML = `
     <div class="text-entry-header">
