@@ -19,12 +19,16 @@ export class SSEClient {
     this.closed = false;
     this.reconnectTimer = null;
     this.lastEventId = "";
+    this.firstConnect = true;
     this.listeners = { connecting: [], reconnected: [], disconnected: [] };
   }
 
   connect() {
     if (this.closed) return;
-    this._emit("connecting");
+    // Spec 13.7: the yellow banner is for RE-connecting. The very first
+    // attempt is silent so a healthy page load never flashes "Reconnecting...".
+    if (!this.firstConnect) this._emit("connecting");
+    this.firstConnect = false;
     const params = new URLSearchParams({
       roomId: this.roomId,
       deviceId,

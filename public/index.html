@@ -30,6 +30,12 @@
       } catch (e) {
         /* Storage unavailable: keep data-theme="system" + CSS media fallback */
       }
+      /* Watchdog: if the app module never reveals the shell (failed module
+         load or a hung request), show it anyway instead of a blank page. */
+      setTimeout(function () {
+        var app = document.getElementById("app");
+        if (app && app.style.display !== "flex") app.style.display = "flex";
+      }, 2500);
     </script>
   </head>
   <body>
@@ -987,23 +993,10 @@
         role="alert"
       >
         <div class="disconnected-content">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="2" y1="12" x2="22" y2="12" />
-            <path
-              d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
-            />
+          <!-- Spec 13.9: progress ring while the client auto-reconnects -->
+          <svg width="56" height="56" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+            <circle class="disconnected-ring-track" cx="24" cy="24" r="20" />
+            <circle class="disconnected-ring-head" cx="24" cy="24" r="20" />
           </svg>
           <h2>Connection lost</h2>
           <p>Reconnecting in <span id="reconnect-timer">3</span>s...</p>

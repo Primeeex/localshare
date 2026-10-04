@@ -43,10 +43,11 @@ export function createApp(config, storage, rooms, sse, logger, networkInfo) {
           // WHY the hash: spec 6.10 requires an inline <script> in <head> to
           // apply the stored theme before first paint, while spec "HTTP
           // Headers" requires script-src 'self'. Hash-allowlisting the exact
-          // script bytes satisfies both without 'unsafe-inline'. If the
-          // inline theme script in public/{index,pin}.html changes, recompute
+          // script bytes satisfies both without 'unsafe-inline'. The same
+          // script also contains the blank-page reveal watchdog. If the
+          // inline head script in public/{index,pin}.html changes, recompute
           // (guarded by test/integration/text.test.js).
-          scriptSrc: ["'self'", "'sha256-Vv48b9x+BTII0mGyZuYRe8xRmx3ttM/jGb/fOjju0jA='"],
+          scriptSrc: ["'self'", "'sha256-hwOnfDL+aKkYywy1Cgz6kqp14sZA0uHb0KX9V4GjKt4='"],
           styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
           fontSrc: ["https://fonts.gstatic.com"],
           imgSrc: ["'self'", "data:"],

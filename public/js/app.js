@@ -35,6 +35,10 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 // ===== Boot =====
 async function boot() {
   applyStoredTheme();
+  // Reveal the shell before the first await: even if authStatus hangs, the
+  // user gets the app shell instead of a blank page (otherwise the only
+  // rendered element would be the off-screen skip link).
+  $("#app").style.display = "flex";
   try {
     const auth = await API.authStatus();
     if (auth.pinRequired && !auth.authenticated) {
@@ -49,8 +53,6 @@ async function boot() {
 }
 
 async function startApp() {
-  $("#app").style.display = "flex";
-
   // Identify this device
   const savedName = localStorage.getItem("localshare:deviceName");
   if (!savedName) {
@@ -310,10 +312,10 @@ function connectSSE() {
   state.sse = new SSEClient(state.roomId, handlers);
 
   state.sse.on("connecting", () => {
+    // A retry is in flight: show the subtle banner (spec 13.7) and leave the
+    // disconnect overlay/countdown exactly as they are. Hiding the overlay
+    // here made the disconnect UI flicker on every retry attempt.
     $("#reconnect-banner").style.display = "flex";
-    $("#disconnected-overlay").style.display = "none";
-    setOffline(false);
-    stopOfflineCountdown();
   });
   state.sse.on("reconnected", () => {
     $("#reconnect-banner").style.display = "none";

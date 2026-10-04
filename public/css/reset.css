@@ -109,16 +109,17 @@ svg {
   border: 0;
 }
 
-/* Skip link: visually hidden until focused */
+/* Skip link: visually hidden until focused. Accent treatment so the first
+   keyboard stop reads as a deliberate control, not stray text. */
 .skip-link {
   position: absolute;
   top: -48px;
   left: var(--space-2);
   z-index: calc(var(--z-header) + 10);
   padding: var(--space-2) var(--space-4);
-  background: var(--color-bg-elevated);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border-control);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
   font-size: var(--text-sm);

@@ -115,12 +115,29 @@
   }
 }
 
-@keyframes reconnect-progress {
+@keyframes reconnect-sweep {
   from {
-    width: 0%;
+    transform: translateX(-110%);
   }
   to {
-    width: 100%;
+    transform: translateX(320%);
+  }
+}
+
+@keyframes banner-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ring-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
