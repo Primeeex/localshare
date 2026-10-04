@@ -9,11 +9,28 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 export const deviceId = (() => {
   let id = sessionStorage.getItem("localshare:deviceId");
   if (!id) {
-    id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    id = randomId();
     sessionStorage.setItem("localshare:deviceId", id);
   }
   return id;
 })();
+
+/**
+ * 12 hex chars, matching what `crypto.randomUUID()` yields after the strip.
+ * WHY the fallback: `crypto.randomUUID()` is secure-context-only, so on a LAN
+ * device opening http://<lan-ip>:3000 (plain HTTP) it is `undefined` and this
+ * module threw at import time, killing the whole app (no theme toggle, no
+ * uploads - only the skip link rendered). `crypto.getRandomValues` works in
+ * insecure contexts.
+ */
+function randomId() {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+  }
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 export let deviceName = localStorage.getItem("localshare:deviceName") || "";
 export function setDeviceName(name) {

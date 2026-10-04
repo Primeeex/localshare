@@ -81,3 +81,51 @@ export function escapeHtml(str) {
   div.textContent = String(str ?? "");
   return div.innerHTML;
 }
+
+/**
+ * Copy text with the fallback chain required by spec 24.1:
+ *
+ *   clipboard.writeText unavailable or rejected
+ *     -> execCommand("copy") from a temporary textarea
+ *
+ * WHY the fallback matters here: `navigator.clipboard` only exists in secure
+ * contexts, so on a plain-HTTP LAN URL (http://192.168.x.x:3000) every Copy
+ * button would otherwise silently fail. `document.execCommand("copy")` still
+ * works there because it runs inside the click gesture.
+ *
+ * @param {string} text
+ * @returns {Promise<boolean>} true when the text is on the clipboard
+ */
+export async function copyText(text) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Permission denied, document unfocused, or a locked-down browser:
+      // fall through to the legacy path instead of failing the user.
+    }
+  }
+  return legacyCopy(text);
+}
+
+function legacyCopy(text) {
+  if (typeof document === "undefined" || !document.body) return false;
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.setAttribute("aria-hidden", "true");
+  ta.style.cssText =
+    "position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;pointer-events:none;";
+  document.body.appendChild(ta);
+  try {
+    ta.focus({ preventScroll: true });
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    ta.remove();
+  }
+}

@@ -2,7 +2,7 @@
  * Clipboard tab: entry rendering + copy-on-view sync.
  */
 
-import { escapeHtml, formatRelativeTime } from "./util.js";
+import { escapeHtml, formatRelativeTime, copyText } from "./util.js";
 import { deviceId } from "./api.js";
 
 export function renderClipboardEntry(entry, actions = {}) {
@@ -28,14 +28,13 @@ export function renderClipboardEntry(entry, actions = {}) {
   `;
 
   el.querySelector("[data-copy]").addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(entry.content);
+    if (await copyText(entry.content)) {
       markCopied(entry.id);
       const btn = el.querySelector("[data-copy]");
       const original = btn.textContent;
       btn.textContent = "Copied";
       setTimeout(() => (btn.textContent = original), 1500);
-    } catch {
+    } else {
       actions.onCopyFailed?.();
     }
   });
@@ -78,16 +77,14 @@ function setupEntryObserver(el, entry) {
 
 async function autoCopy(entry) {
   if (syncedAt.has(entry.id)) return;
-  // Clipboard API requires secure context and permission
-  if (!navigator.clipboard?.writeText) return;
-  try {
-    await navigator.clipboard.writeText(entry.content);
+  // copyText covers insecure LAN origins (no navigator.clipboard) via
+  // execCommand; when neither path is allowed we stay silent - this runs
+  // without a user gesture, so a failure here must never interrupt the UI.
+  if (await copyText(entry.content)) {
     syncedAt.set(entry.id, Date.now());
     // Subtle indicator: mark the row
     const row = document.querySelector(`[data-clipboard-id="${entry.id}"]`);
     if (row) row.classList.add("synced");
-  } catch {
-    // Permission denied or insecure context: fall back to manual copy
   }
 }
 

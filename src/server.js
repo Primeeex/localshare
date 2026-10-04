@@ -53,8 +53,20 @@ export function createApp(config, storage, rooms, sse, logger, networkInfo) {
           imgSrc: ["'self'", "data:"],
           connectSrc: ["'self'"],
           objectSrc: ["'none'"],
+          // WHY disable: helmet's default `upgrade-insecure-requests` rewrites
+          // every relative URL (/css/*, /js/*) to https:// on non-localhost
+          // hosts. LocalShare serves plain HTTP on the LAN, so opening
+          // http://<lan-ip>:3000 upgraded all subresources to https:// and they
+          // died with ERR_SSL_PROTOCOL_ERROR - unstyled page, #app never
+          // revealed (only the skip link visible). Chrome exempts localhost
+          // (a potentially-trustworthy origin), which masked the bug there.
+          // Spec 18 "HTTP Headers (helmet)" does not include this directive.
+          upgradeInsecureRequests: null,
         },
       },
+      // WHY: spec 18 requires X-Frame-Options: DENY (helmet default is
+      // SAMEORIGIN).
+      frameguard: { action: "deny" },
     })
   );
 

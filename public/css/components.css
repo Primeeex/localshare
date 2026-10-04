@@ -97,6 +97,43 @@
   min-width: 32px;
 }
 
+/* ===== Theme toggle (spec 6.10: system -> light -> dark cycle) =====
+   WHY this block exists: on a dark OS, "system" and "dark" render identically,
+   so one of the three clicks used to look like a dead button. The system state
+   now carries a persistent dot, which makes every click visibly change the
+   control, and the sun/moon glyph pops when it swaps so the change registers. */
+#theme-toggle {
+  position: relative;
+}
+
+#theme-toggle::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-bg-surface);
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+  pointer-events: none;
+}
+
+#theme-toggle[data-theme-state="system"]::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+#theme-toggle.theme-pop .icon-sun,
+#theme-toggle.theme-pop .icon-moon {
+  animation: theme-icon-pop 150ms ease;
+}
+
 /* Loading state */
 .btn.loading {
   pointer-events: none;

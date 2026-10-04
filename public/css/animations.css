@@ -141,6 +141,19 @@
   }
 }
 
+/* Theme toggle glyph swap (spec 13.6: 150ms ease). Scale + slight rotation
+   gives each of the three state clicks a tactile response. */
+@keyframes theme-icon-pop {
+  0% {
+    transform: rotate(-45deg) scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+    opacity: 1;
+  }
+}
+
 /* Animation utilities */
 .fade-in {
   animation: fade-in 200ms ease forwards;

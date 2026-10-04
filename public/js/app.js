@@ -6,7 +6,7 @@
 import API, { deviceId, setDeviceName } from "./api.js";
 import { SSEClient } from "./sse-client.js";
 import toast from "./toast.js";
-import { formatBytes } from "./util.js";
+import { formatBytes, copyText } from "./util.js";
 import { renderFileRow, previewFile } from "./files.js";
 import { renderTextEntry } from "./text.js";
 import { renderClipboardEntry, setupClipboardSync } from "./clipboard.js";
@@ -1082,10 +1082,10 @@ async function openQRModal() {
   };
 
   $("#copy-url-btn").onclick = async () => {
-    try {
-      await navigator.clipboard.writeText($("#qr-url").textContent);
+    // copyText works over plain-HTTP LAN too (execCommand fallback, spec 24.1)
+    if (await copyText($("#qr-url").textContent)) {
       toast.show("URL copied", "success");
-    } catch {
+    } else {
       toast.show("Could not copy URL", "error");
     }
   };
@@ -1156,6 +1156,19 @@ function showShutdownBanner(data) {
 }
 
 // ===== Theme =====
+// WHY 3 states instead of a 2 state toggle: spec 6.10 asks for a system / light /
+// dark cycle. A 3 state cycle with no per state affordance looks broken, because
+// one of the three clicks lands on a visually identical result (on a dark OS,
+// "system" and "dark" render the same). So every state gets an identity:
+// the button announces the mode it switches TO, the pressed state is exposed
+// for assistive tech, and the icon crossfades instead of hard swapping.
+const THEME_ORDER = ["system", "light", "dark"];
+const THEME_LABELS = {
+  system: { next: "Light", nextShort: "Light", current: "System" },
+  light: { next: "Dark", nextShort: "Dark", current: "Light" },
+  dark: { next: "System", nextShort: "System", current: "Dark" },
+};
+
 function effectiveTheme(theme) {
   if (theme === "system") {
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -1175,13 +1188,24 @@ function applyStoredTheme() {
 }
 
 function toggleTheme() {
-  const order = ["system", "light", "dark"];
   const current = document.documentElement.dataset.theme || "system";
-  const next = order[(order.indexOf(current) + 1) % order.length];
+  const next = THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length];
   document.documentElement.dataset.theme = next;
   localStorage.setItem("localshare:theme", next);
   updateThemeIcon(next);
   syncThemeColor(next);
+  popThemeIcon();
+}
+
+/* Restart the glyph pop on every click, even when the swap lands on the same
+   glyph (dark -> system on a dark OS). Without this, one of the three states
+   changes nothing visible and the button feels broken. */
+function popThemeIcon() {
+  const btn = document.getElementById("theme-toggle");
+  if (!btn) return;
+  btn.classList.remove("theme-pop");
+  void btn.offsetWidth;
+  btn.classList.add("theme-pop");
 }
 
 /* Browser chrome tint follows the effective theme. The media-scoped metas in
@@ -1204,12 +1228,27 @@ function syncThemeColor(theme) {
 }
 
 function updateThemeIcon(theme) {
+  const btn = document.getElementById("theme-toggle");
   const sun = document.querySelector(".icon-sun");
   const moon = document.querySelector(".icon-moon");
+  const labels = THEME_LABELS[theme] || THEME_LABELS.system;
+
+  // Announce what the next click does, so no click ever looks like a no-op.
+  if (btn) {
+    btn.setAttribute("aria-label", `Theme: ${labels.current}. Switch to ${labels.next}`);
+    btn.setAttribute("title", `Theme: ${labels.current}. Switch to ${labels.next}`);
+    btn.dataset.themeState = theme;
+  }
+
   if (!sun || !moon) return;
   const effective = effectiveTheme(theme);
-  sun.style.display = effective === "dark" ? "none" : "block";
-  moon.style.display = effective === "dark" ? "block" : "none";
+  const showMoon = effective === "dark";
+  // Only write when the value actually changes: rewriting display on every
+  // call restarts the CSS transition and reads as an unresponsive button.
+  const nextSun = showMoon ? "none" : "block";
+  const nextMoon = showMoon ? "block" : "none";
+  if (sun.style.display !== nextSun) sun.style.display = nextSun;
+  if (moon.style.display !== nextMoon) moon.style.display = nextMoon;
 }
 
 // ===== Device name =====

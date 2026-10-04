@@ -2,7 +2,7 @@
  * Text entry rendering.
  */
 
-import { escapeHtml, formatRelativeTime, formatBytes } from "./util.js";
+import { escapeHtml, formatRelativeTime, formatBytes, copyText } from "./util.js";
 
 function looksLikeCode(text) {
   if (text.length > 4000) return false;
@@ -45,15 +45,14 @@ export function renderTextEntry(entry, actions = {}) {
   `;
 
   el.querySelector("[data-copy]").addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(entry.content);
+    if (await copyText(entry.content)) {
       actions.onCopied?.();
       // Optimistic label change for feedback
       const btn = el.querySelector("[data-copy]");
       const original = btn.textContent;
       btn.textContent = "Copied";
       setTimeout(() => (btn.textContent = original), 1500);
-    } catch {
+    } else {
       actions.onCopyFailed?.();
     }
   });
