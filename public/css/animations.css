@@ -33,22 +33,22 @@
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(16px) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
 @keyframes toast-out {
   from {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
   to {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(-8px) scale(0.96);
   }
 }
 
@@ -115,15 +115,6 @@
   }
 }
 
-@keyframes reconnect-sweep {
-  from {
-    transform: translateX(-110%);
-  }
-  to {
-    transform: translateX(320%);
-  }
-}
-
 @keyframes banner-drop {
   from {
     opacity: 0;
@@ -132,6 +123,22 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* WHY a separate keyframe: the reconnect banner is centred with
+   `left:50%; transform: translateX(-50%)`. `banner-drop` animates `transform`,
+   which REPLACES that whole value, so for the length of the animation the pill
+   sat half its width off-centre and then snapped back when it ended. Both
+   frames have to carry the X centring for the banner to stay where it is put. */
+@keyframes banner-pill-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
   }
 }
 

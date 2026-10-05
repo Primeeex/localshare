@@ -6,13 +6,34 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, writeFile, mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Storage, sanitizeFilename } from "../../src/storage.js";
+import { Storage, sanitizeFilename, MAX_FILENAME_BYTES } from "../../src/storage.js";
 
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
 const MAX_STORAGE = 10 * 1024 * 1024; // 10MB
 
-function bufferFile(content) {
-  return { buffer: Buffer.from(content) };
+let stagedCount = 0;
+
+/**
+ * Stage bytes into the storage staging directory, the way the upload route
+ * hands a completed multipart part to saveFile.
+ * @param {Storage} storage
+ * @param {string|Buffer} content
+ * @returns {Promise<string>} The staged path
+ */
+async function stageFile(storage, content) {
+  await storage.ensureTempDir();
+  stagedCount += 1;
+  const path = join(storage.getTempDir(), `staged-${stagedCount}-${randomSuffix()}`);
+  await writeFile(path, content);
+  return path;
+}
+
+/**
+ * Produce a suffix that will not collide between staged files.
+ * @returns {string}
+ */
+function randomSuffix() {
+  return Math.random().toString(36).slice(2, 10);
 }
 
 describe("storage", () => {
@@ -49,13 +70,40 @@ describe("storage", () => {
     it("keeps normal names intact", () => {
       expect(sanitizeFilename("report-2024.final.pdf")).toBe("report-2024.final.pdf");
     });
+
+    it("caps a 300-character name at 255 UTF-8 bytes", () => {
+      const result = sanitizeFilename(`${"a".repeat(300)}.txt`);
+      expect(Buffer.byteLength(result, "utf-8")).toBeLessThanOrEqual(MAX_FILENAME_BYTES);
+      expect(result.endsWith(".txt")).toBe(true);
+      expect(result.length).toBe(255);
+    });
+
+    it("caps a name at 255 bytes while preserving the extension", () => {
+      const result = sanitizeFilename(`${"x".repeat(400)}.pdf`);
+      expect(Buffer.byteLength(result, "utf-8")).toBe(MAX_FILENAME_BYTES);
+      expect(result.endsWith(".pdf")).toBe(true);
+    });
+
+    it("caps multibyte CJK names by bytes, not code points", () => {
+      const result = sanitizeFilename(`${"測試中文字".repeat(200)}.txt`);
+      expect(Buffer.byteLength(result, "utf-8")).toBeLessThanOrEqual(MAX_FILENAME_BYTES);
+      expect(result.endsWith(".txt")).toBe(true);
+      expect(result).not.toContain("�");
+    });
+
+    it("caps emoji names without splitting a surrogate pair", () => {
+      const result = sanitizeFilename(`${"🎉🎊".repeat(200)}.bin`);
+      expect(Buffer.byteLength(result, "utf-8")).toBeLessThanOrEqual(MAX_FILENAME_BYTES);
+      expect(result.endsWith(".bin")).toBe(true);
+      expect(result).not.toContain("�");
+    });
   });
 
   describe("saveFile", () => {
     it("writes the file and sidecar to the room directory", async () => {
       const meta = await storage.saveFile(
         "default",
-        bufferFile("hello world"),
+        await stageFile(storage, "hello world"),
         "hello.txt",
         11,
         "text/plain",
@@ -77,7 +125,7 @@ describe("storage", () => {
     it("computes expiresAt from the expiry duration", async () => {
       const meta = await storage.saveFile(
         "default",
-        bufferFile("x"),
+        await stageFile(storage, "x"),
         "x.txt",
         1,
         "text/plain",
@@ -106,7 +154,15 @@ describe("storage", () => {
 
     it("rejects invalid room IDs", async () => {
       await expect(
-        storage.saveFile("../evil", bufferFile("x"), "x.txt", 1, "text/plain", "t", null)
+        storage.saveFile(
+          "../evil",
+          await stageFile(storage, "x"),
+          "x.txt",
+          1,
+          "text/plain",
+          "t",
+          null
+        )
       ).rejects.toMatchObject({ code: "INVALID_ID" });
     });
   });
@@ -115,7 +171,7 @@ describe("storage", () => {
     it("returns a stream and metadata for an existing file", async () => {
       const meta = await storage.saveFile(
         "default",
-        bufferFile("stream me"),
+        await stageFile(storage, "stream me"),
         "s.txt",
         8,
         "text/plain",
@@ -140,7 +196,7 @@ describe("storage", () => {
     it("updates metadata and persists it to the sidecar", async () => {
       const meta = await storage.saveFile(
         "default",
-        bufferFile("abc"),
+        await stageFile(storage, "abc"),
         "a.txt",
         3,
         "text/plain",
@@ -164,8 +220,24 @@ describe("storage", () => {
 
   describe("listFiles / deleteFile", () => {
     it("lists files for a room and an empty room", async () => {
-      await storage.saveFile("default", bufferFile("one"), "one.txt", 3, "text/plain", "t", null);
-      await storage.saveFile("default", bufferFile("two"), "two.txt", 3, "text/plain", "t", null);
+      await storage.saveFile(
+        "default",
+        await stageFile(storage, "one"),
+        "one.txt",
+        3,
+        "text/plain",
+        "t",
+        null
+      );
+      await storage.saveFile(
+        "default",
+        await stageFile(storage, "two"),
+        "two.txt",
+        3,
+        "text/plain",
+        "t",
+        null
+      );
       const files = await storage.listFiles("default");
       expect(files).toHaveLength(2);
       expect(await storage.listFiles("empty-room")).toHaveLength(0);
@@ -174,7 +246,7 @@ describe("storage", () => {
     it("deletes the file and its sidecar", async () => {
       const meta = await storage.saveFile(
         "default",
-        bufferFile("bye"),
+        await stageFile(storage, "bye"),
         "bye.txt",
         3,
         "text/plain",
@@ -194,7 +266,7 @@ describe("storage", () => {
     it("reconstructs metadata from sidecars after a restart", async () => {
       const meta = await storage.saveFile(
         "default",
-        bufferFile("persist me"),
+        await stageFile(storage, "persist me"),
         "p.txt",
         10,
         "text/plain",
@@ -229,9 +301,33 @@ describe("storage", () => {
   describe("calculateTotalSize", () => {
     it("sums file sizes across rooms", async () => {
       expect(storage.calculateTotalSize()).toBe(0);
-      await storage.saveFile("default", bufferFile("12345"), "a.txt", 5, "text/plain", "t", null);
-      await storage.saveFile("default", bufferFile("123"), "b.txt", 3, "text/plain", "t", null);
-      await storage.saveFile("other", bufferFile("1"), "c.txt", 1, "text/plain", "t", null);
+      await storage.saveFile(
+        "default",
+        await stageFile(storage, "12345"),
+        "a.txt",
+        5,
+        "text/plain",
+        "t",
+        null
+      );
+      await storage.saveFile(
+        "default",
+        await stageFile(storage, "123"),
+        "b.txt",
+        3,
+        "text/plain",
+        "t",
+        null
+      );
+      await storage.saveFile(
+        "other",
+        await stageFile(storage, "1"),
+        "c.txt",
+        1,
+        "text/plain",
+        "t",
+        null
+      );
       expect(storage.calculateTotalSize()).toBe(9);
     });
   });

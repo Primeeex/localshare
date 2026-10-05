@@ -16,7 +16,9 @@ import { createErrorHandler } from "./middleware/errorHandler.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
 import { corsMiddleware } from "./middleware/cors.js";
 import { authMiddleware } from "./middleware/auth.js";
+import { roomPinGuard } from "./middleware/roomPin.js";
 import { rateLimit } from "./middleware/rateLimit.js";
+import { setDataDir } from "./auth.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -30,9 +32,24 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * @param {import('./network.js').NetworkInfo} networkInfo
  * @returns {{ app: import('express').Express, start: (port: number) => Promise<void>, stop: () => void }}
  */
+/**
+ * Strip a room PIN out of a URL before it reaches the logs.
+ * @param {string} url
+ * @returns {string}
+ */
+function redactRoomPin(url) {
+  return String(url).replace(/([?&]roomPin=)[^&]*/gi, "$1[redacted]");
+}
 export function createApp(config, storage, rooms, sse, logger, networkInfo) {
   const app = express();
   const isDevelopment = config.logLevel === "debug" || config.logLevel === "trace";
+
+  // WHY here: the auth module signs and verifies session cookies, and it
+  // persists the signing secret inside the upload directory so that a restart
+  // does not invalidate every client's session. This must run before the first
+  // request is handled, and the upload directory is the one path the
+  // deployment instructions already tell users to keep.
+  setDataDir(config.dir);
 
   // WHY: security headers via helmet
   app.use(
@@ -47,8 +64,11 @@ export function createApp(config, storage, rooms, sse, logger, networkInfo) {
           // script also contains the blank-page reveal watchdog. If the
           // inline head script in public/{index,pin}.html changes, recompute
           // (guarded by test/integration/text.test.js).
-          scriptSrc: ["'self'", "'sha256-hwOnfDL+aKkYywy1Cgz6kqp14sZA0uHb0KX9V4GjKt4='"],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          scriptSrc: ["'self'", "'sha256-EYmDiX2mBjslWsK6dCibjp+ugBiv6O4ZyiapgHleLnQ='"],
+          // WHY no 'unsafe-inline': spec 18 pins
+          // style-src 'self' https://fonts.googleapis. Any inline style in
+          // public/{index,pin}.html must move to a class or a CSP hash.
+          styleSrc: ["'self'", "https://fonts.googleapis.com"],
           fontSrc: ["https://fonts.gstatic.com"],
           imgSrc: ["'self'", "data:"],
           connectSrc: ["'self'"],
@@ -89,10 +109,18 @@ export function createApp(config, storage, rooms, sse, logger, networkInfo) {
   app.use(
     express.static(publicDir, {
       index: false,
+      etag: true,
+      lastModified: true,
       setHeaders: (res, path) => {
-        // WHY: cache static assets aggressively
+        // WHY no-cache instead of max-age: there is no content hash in the
+        // asset filenames, so an aggressive max-age pins browsers to whatever
+        // CSS/JS they happened to fetch first. Editing a stylesheet then had
+        // no visible effect for up to an hour unless the user knew to
+        // hard-reload. "no-cache" still allows the 304 revalidation path (so
+        // repeat loads cost ~0 bytes) but always re-checks with the server,
+        // which makes edits show up on a normal refresh.
         if (path.endsWith(".js") || path.endsWith(".css")) {
-          res.setHeader("Cache-Control", "public, max-age=3600");
+          res.setHeader("Cache-Control", "no-cache");
         }
       },
     })
@@ -101,15 +129,33 @@ export function createApp(config, storage, rooms, sse, logger, networkInfo) {
   // Auth middleware (only when PIN is required)
   app.use(authMiddleware(!!config.pin));
 
+  // Room-level PIN guard (spec 12): only rooms that actually carry a PIN are
+  // affected, so rooms without one keep working with zero headers.
+  app.use("/api/rooms/:roomId", roomPinGuard(rooms));
+
   // Rate limiting for API routes (disable in tests via config.rateLimit === false)
   if (config.rateLimit !== false) {
-    app.use("/api", rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+    // WHY the generous ceiling: this limiter exists to blunt abuse, not to cap
+    // normal use. One client-side refreshAll() fans out to four GETs, and the
+    // app refreshes on every SSE event and again on every reconnect. The old
+    // 100-per-15-min budget was exhausted by roughly 25 refreshes, after which
+    // EVERY api call - including room creation - returned 429 for the rest of
+    // the window. That is what made creating a PIN room look like a crash.
+    // Reads are cheap and idempotent, so they get a wide ceiling and the tight
+    // limits below still protect the genuinely expensive, destructive paths.
+    app.use("/api", rateLimit({ windowMs: 15 * 60 * 1000, max: 2000 }));
     app.use(
       "/api/auth/verify",
       rateLimit({ windowMs: 60 * 1000, max: 5, keyGenerator: (req) => req.ip })
     );
-    app.use(
-      "/api/:roomId/files",
+    // WHY the path: the spec rate-limits "uploads", which are served by
+    // POST /api/rooms/:roomId/files. The old mount at "/api/:roomId/files"
+    // bound :roomId to the literal "rooms" and never matched a real upload.
+    // WHY method routing: downloads and previews share the same path prefix, so
+    // the limiter is scoped to POST - otherwise the download of a few large
+    // files would exhaust the upload budget.
+    app.post(
+      "/api/rooms/:roomId/files",
       rateLimit({ windowMs: 60 * 1000, max: 10, keyGenerator: (req) => req.ip })
     );
   }
@@ -122,7 +168,11 @@ export function createApp(config, storage, rooms, sse, logger, networkInfo) {
       logger.info(
         {
           method: req.method,
-          url: req.originalUrl,
+          // WHY redact: EventSource cannot send headers, so a room PIN has to
+          // ride in the query string. Logged verbatim it wrote every room PIN
+          // in cleartext into the access log -- and the same URL also lands in
+          // browser history and any reverse proxy's log ahead of us.
+          url: redactRoomPin(req.originalUrl),
           status: res.statusCode,
           duration,
           reqId: req.id,
@@ -155,7 +205,7 @@ export function createApp(config, storage, rooms, sse, logger, networkInfo) {
     logger,
     config,
   });
-  app.get("/events", eventsHandler);
+  app.get("/events", roomPinGuard(rooms), eventsHandler);
 
   // Fallback: serve index.html for SPA routing.
   // WHY app.all: a non-GET request to an unknown API path would otherwise fall

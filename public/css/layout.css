@@ -18,6 +18,28 @@ body {
   scroll-margin-top: calc(var(--header-height) + var(--space-4));
 }
 
+/* Rows are keyboard-focusable but carry no id, so scrollIntoView() from the
+   j/k shortcuts used to park a focused row underneath the sticky header.
+   Same for every other focusable block in a long list. */
+.file-row,
+.text-entry,
+.clipboard-entry,
+.device-row,
+.upload-row {
+  scroll-margin-top: calc(var(--header-height) + var(--space-2));
+}
+
+/* While the reconnect banner is up it occupies a fixed band directly under
+   the header, so the keyboard target moves down with it and can never end up
+   behind the banner. */
+body[data-offline] .file-row,
+body[data-offline] .text-entry,
+body[data-offline] .clipboard-entry,
+body[data-offline] .device-row,
+body[data-offline] .upload-row {
+  scroll-margin-top: calc(var(--header-height) + var(--banner-height) + var(--space-2));
+}
+
 #app {
   display: flex;
   flex-direction: column;
@@ -27,12 +49,22 @@ body {
   margin: 0 auto;
   width: 100%;
 }
+#app[hidden] {
+  display: none;
+}
+
+/* Reserve the reconnect banner's band instead of letting a fixed element
+   land on top of the tab bar. Pushing the shell down keeps every control
+   -- including the focused one -- visible while the connection recovers. */
+body[data-offline] #app {
+  padding-top: var(--banner-height);
+}
 
 /* Header */
 .header {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   height: var(--header-height);
   padding: 0 var(--space-3);
   background: var(--color-bg-surface);
@@ -46,16 +78,20 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex-shrink: 0;
+  /* Shrinkable: at 320px the room name truncates instead of pushing the
+     header controls off-screen (all of them are 44px on touch). */
+  flex: 0 1 auto;
   min-width: 0;
 }
 
 .header-logo {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
   padding: var(--space-1);
   border-radius: var(--radius-md);
+  color: var(--color-text-primary);
   transition: background-color var(--transition-fast);
 }
 
@@ -73,15 +109,16 @@ body {
   white-space: nowrap;
 }
 
-/* Room name replaces the room selector in the phone header */
+/* Room name replaces the room selector in the phone header. 22ch keeps the
+   name readable at 320px while leaving room for the right-hand controls. */
 .header-room-name {
   display: inline-block;
-  max-width: 32vw;
+  max-width: min(22ch, 40vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium);
   color: var(--color-text-secondary);
 }
 
@@ -91,6 +128,7 @@ body {
   align-items: center;
   gap: var(--space-2);
   justify-content: center;
+  min-width: 0;
 }
 
 .header-right {
@@ -126,22 +164,49 @@ body {
   flex: 1;
   padding: 0 var(--space-2);
   height: 100%;
+  min-height: var(--touch-target);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-tight);
   color: var(--color-text-secondary);
   border-bottom: 2px solid transparent;
   /* WHY no transition: spec 13.6 "Tab switch: instant" (motion sickness) */
   white-space: nowrap;
   min-width: 0;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
 }
 
-.tab:hover {
-  color: var(--color-text-primary);
+.tab::before {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: var(--color-accent);
+  border-radius: 1px;
+  transition:
+    width var(--transition-fast),
+    left var(--transition-fast);
+  opacity: 0;
+}
+
+.tab:hover::before {
+  width: 80%;
+  left: 10%;
+  opacity: 1;
 }
 
 .tab.active {
   color: var(--color-text-primary);
   border-bottom-color: var(--color-accent);
+}
+
+.tab.active::before {
+  width: 100%;
+  left: 0;
+  opacity: 1;
 }
 
 /* Main content */
@@ -164,7 +229,8 @@ body {
   display: flex;
 }
 
-/* Status bar: hidden on phones (spec 13.1) */
+/* Status bar: hidden on phones (spec 13.1). Mono + tabular so the uptime
+   counter does not shuffle the rest of the line while it ticks. */
 .statusbar {
   display: none;
   align-items: center;
@@ -173,6 +239,8 @@ body {
   font-size: var(--text-xs);
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-mono);
   border-top: 1px solid var(--color-border);
   background: var(--color-bg-surface);
 }
@@ -186,10 +254,34 @@ body {
   display: flex;
 }
 
+/* ===== Phone (0-479px): the header is logo | room | menu (spec 13.1) =====
+   Every header control is a 44px touch target under (pointer: coarse), so
+   the only way to keep them all in 56px of height at 320px wide is to remove
+   the fourth one. The QR code stays reachable from the menu sheet and the
+   Devices tab, so nothing is lost -- it is only de-duplicated. */
+@media (max-width: 479px) {
+  .header {
+    gap: var(--space-1);
+  }
+
+  .header-right {
+    gap: var(--space-1);
+  }
+
+  #qr-btn {
+    display: none;
+  }
+}
+
 /* ===== 480px: large phone ===== */
 @media (min-width: 480px) {
   .header {
     padding: 0 var(--space-4);
+    gap: var(--space-3);
+  }
+
+  #qr-btn {
+    display: inline-flex;
   }
 
   .header-title {
@@ -201,7 +293,7 @@ body {
     white-space: normal;
     font-size: var(--text-lg);
     font-weight: var(--weight-semibold);
-    letter-spacing: -0.02em;
+    letter-spacing: var(--tracking-tighter);
   }
 
   .header-room-name {
@@ -289,4 +381,12 @@ body {
   .main {
     padding: var(--space-8);
   }
+}
+
+/* ===== Spacing utilities =====
+   WHY a utility class instead of style="margin-top: 12px": CSP style-src
+   carries no 'unsafe-inline', so inline style attributes are dropped by the
+   browser and the spacing silently disappears. */
+.mt-3 {
+  margin-top: var(--space-3);
 }

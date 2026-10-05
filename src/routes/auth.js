@@ -51,15 +51,13 @@ export default function createAuthRouter(deps) {
         if (result.locked) {
           logger.warn({ ip, lockoutDuration: result.lockoutDuration }, "Auth locked out");
           throw new AppError(
-            result.permanent
-              ? "Too many failed attempts. Access is blocked until the server restarts."
-              : `Too many failed attempts. Try again in ${Math.ceil((result.lockoutDuration || 30000) / 1000)} seconds.`,
+            `Too many failed attempts. Try again in ${Math.ceil((result.lockoutDuration || 30000) / 1000)} seconds.`,
             "AUTH_LOCKED",
             429,
             {
               retriesLeft: 0,
               lockoutDuration: result.lockoutDuration ?? null,
-              permanent: !!result.permanent,
+              permanent: false,
             }
           );
         }

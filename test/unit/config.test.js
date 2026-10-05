@@ -93,7 +93,7 @@ describe("config", () => {
       expect(config.expiry).toBe(parseDuration("24h"));
       expect(config.maxRooms).toBe(20);
       expect(config.maxConnections).toBe(500);
-      expect(config.maxFilesPerRoom).toBe(500);
+      expect(config.maxFilesPerRoom).toBe(200);
       expect(config.cleanup).toBe(true);
       expect(config.qr).toBe(true);
     });

@@ -83,7 +83,7 @@ async function main() {
     })
     .option("max-files-per-room", {
       type: "number",
-      defaultDescription: "500",
+      defaultDescription: "200",
       describe: "Maximum files per room",
     })
     .option("no-cleanup", { type: "boolean", describe: "Disable automatic file cleanup" })
@@ -169,7 +169,7 @@ async function main() {
   }
 
   // Print startup banner
-  printStartupBanner(config, interfaces, primaryIP, logger, argv.noQr);
+  await printStartupBanner(config, interfaces, primaryIP, logger, argv.noQr);
 
   // Setup graceful shutdown
   setupShutdown(server, sse, stop, logger);
@@ -182,53 +182,115 @@ async function main() {
 }
 
 /**
- * Print the startup banner to the terminal.
+ * Width of the startup banner box from spec 14 "Startup Output (Terminal)".
  */
-function printStartupBanner(config, interfaces, primaryIP, logger, noQr) {
+const BANNER_MIN_WIDTH = 53;
+
+/** Matches the SGR sequences the QR renderer emits, which occupy no columns. */
+// eslint-disable-next-line no-control-regex
+const ANSI_PATTERN = /\u001b\[[0-9;]*m/g;
+
+/**
+ * Measure how many terminal columns a string actually occupies.
+ * WHY: ANSI colour codes and surrogate pairs both inflate the raw code-point
+ * count, and padding by that count would skew every border in the box.
+ * @param {string} line
+ * @returns {number}
+ */
+function visibleWidth(line) {
+  return [...line.replace(ANSI_PATTERN, "")].length;
+}
+
+/**
+ * Render one banner line inside the box, padded to the given inner width.
+ * @param {string} line
+ * @param {number} width
+ * @returns {string}
+ */
+function boxLine(line, width) {
+  return `  │${line}${" ".repeat(Math.max(0, width - visibleWidth(line)))}│`;
+}
+
+/**
+ * Render a bordered box around a list of already-indented lines.
+ * WHY a computed width: the QR block is wider than the spec's sample box, so
+ * the box grows to fit instead of clipping the code.
+ * @param {string[]} lines
+ * @returns {string}
+ */
+function renderBox(lines) {
+  const width = lines.reduce((max, line) => Math.max(max, visibleWidth(line)), BANNER_MIN_WIDTH);
+  const rule = "─".repeat(width);
+  return [`  ┌${rule}┐`, ...lines.map((line) => boxLine(line, width)), `  └${rule}┘`].join("\n");
+}
+
+/**
+ * Render the QR code as Unicode half-blocks, resolving to null on failure.
+ * @param {string} url
+ * @param {Object} logger
+ * @returns {Promise<string|null>}
+ */
+function renderQr(url, logger) {
+  return new Promise((resolve) => {
+    QRCode.toString(url, { type: "terminal", small: true }, (err, result) => {
+      if (err) {
+        logger.warn({ error: err.message }, "Failed to generate QR code");
+        return resolve(null);
+      }
+      resolve(result.trimEnd());
+    });
+  });
+}
+
+/**
+ * Print the startup banner to the terminal, boxed exactly as spec 14 shows.
+ * @param {Object} config
+ * @param {Object[]} interfaces
+ * @param {string} primaryIP
+ * @param {Object} logger
+ * @param {boolean} noQr
+ * @returns {Promise<void>}
+ */
+async function printStartupBanner(config, interfaces, primaryIP, logger, noQr) {
   const primaryUrl = buildURL(primaryIP, config.port);
 
-  const pinStatus = config.pin ? "enabled" : "disabled";
   const expiryStatus = config.expiry ? `${formatDuration(config.expiry)} hours` : "never";
   const maxSize = formatBytes(config.maxFileSize);
   const maxStorage = formatBytes(config.maxStorage);
 
-  let banner = `
-  LocalShare v${config.version}
-  ============================
-`;
-  if (config.pin) {
-    banner += `  PIN protection: ${pinStatus}\n`;
-  }
-  banner += `
-  Local:    http://localhost:${config.port}
-`;
+  const body = [];
+  body.push("");
+  body.push(`   📂  LocalShare v${config.version}`);
+  body.push("");
+  body.push(`   Local:    http://localhost:${config.port}`);
   for (const iface of interfaces) {
     const url = buildURL(iface.address, config.port);
-    const marker = iface.address === primaryIP ? " < primary" : "";
-    banner += `  Network: ${url}${marker}\n`;
+    const marker = iface.address === primaryIP ? "  ◄── primary" : "";
+    body.push(`   Network:  ${url}${marker}`);
   }
-
-  banner += `
-  Expiry:   ${expiryStatus}
-  Max file: ${maxSize}
-  Storage:  ${maxStorage}
-  Dir:      ${config.dir}
-`;
+  body.push("");
 
   if (!noQr) {
-    banner += "\n  QR Code (scan to open on phone):\n";
-    // Generate QR code as ANSI art
-    QRCode.toString(primaryUrl, { type: "terminal", small: true }, (err, result) => {
-      if (err) {
-        logger.warn({ error: err.message }, "Failed to generate QR code");
-        console.log(banner);
-        return;
-      }
-      console.log(banner + result + "\n");
-    });
-  } else {
-    console.log(banner);
+    body.push("   QR Code (scan to open on phone):");
+    body.push("");
+    const qr = await renderQr(primaryUrl, logger);
+    if (qr) {
+      for (const line of qr.split("\n")) body.push(`   ${line}`);
+      body.push("");
+    }
   }
+
+  // WHY always printed: spec 14 shows a PIN protection line even with no PIN
+  body.push(`   PIN protection: ${config.pin ? "enabled" : "disabled"}`);
+  body.push(`   File expiry:    ${expiryStatus}`);
+  body.push(`   Max file size:  ${maxSize}`);
+  body.push(`   Max storage:    ${maxStorage}`);
+  body.push(`   Storage dir:    ${config.dir}`);
+  body.push("");
+  body.push("   Press Ctrl+C to stop");
+  body.push("");
+
+  console.log(renderBox(body));
 }
 
 /**

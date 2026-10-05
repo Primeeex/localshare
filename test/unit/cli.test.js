@@ -101,8 +101,8 @@ describe("CLI", () => {
     });
 
     try {
-      // The Dir line is last in the banner, so everything is flushed by then
-      const banner = await waitForOutput(child, `Dir:      ${dir}`, 12000);
+      // The Storage dir line is last in the banner, so everything is flushed by then
+      const banner = await waitForOutput(child, `Storage dir:    ${dir}`, 12000);
       // yargs must not inject its own defaults ahead of the environment
       expect(banner).toContain(`http://localhost:${port}`);
       expect(banner).toContain(dir);

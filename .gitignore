@@ -6,3 +6,6 @@ dist/
 .DS_Store
 *.local
 coverage/
+
+# Runtime secret generated on first boot; never commit it.
+.localshare-secret

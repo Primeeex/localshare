@@ -1,73 +1,156 @@
 /**
  * Toast notification manager for LocalShare.
+ *
+ * Spec 6.25:
+ * - `show({ message, type, duration, title })` or `show(message, type, opts)`
+ * - default duration 4s, error toasts 8s (spec PROMPT.md:939)
+ * - at most 5 toasts visible; extras QUEUE behind the oldest, they never
+ *   evict it (spec PROMPT.md:941)
+ * - icons come from `icons.js` and are always decorative
+ *
+ * @module toast
  */
 
-const ICONS = {
-  success:
-    '<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
-  error:
-    '<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
-  warning:
-    '<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
-  info: '<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+import { icon } from "./icons.js";
+
+/** Toasts visible at once. Additional ones wait in a FIFO queue. */
+const MAX_VISIBLE = 5;
+/** Spec 6.25: "Default duration: 4 seconds. Error toasts: 8 seconds." */
+const DEFAULT_DURATION = 4000;
+const ERROR_DURATION = 8000;
+/** Matches `.toast-exit` (150ms); fallback in case `animationend` never fires. */
+const EXIT_MS = 250;
+
+const ICON_FOR_TYPE = {
+  success: "success",
+  error: "error",
+  warning: "alert",
+  info: "info",
 };
 
 class ToastManager {
   constructor() {
     this.container = null;
-    this.max = 5;
+    this.max = MAX_VISIBLE;
+    /** Mounted toast elements. */
+    this.live = new Set();
+    /** Toast elements with a running auto-dismiss timer. */
     this.timers = new Map();
+    /** Pending toasts waiting for a free slot, oldest first. */
+    this.queue = [];
   }
 
   init() {
     this.container = document.getElementById("toast-container");
   }
 
-  show(message, type = "info", { duration = 4000, title } = {}) {
+  /**
+   * Show a toast.
+   *
+   * Accepts both call styles so existing callers keep working:
+   * ```js
+   * show(message, type, { duration, title })
+   * show({ message, type, duration, title })
+   * ```
+   *
+   * @param {string|{message?: string, type?: string, duration?: number, title?: string}} message
+   * @param {string} [type] `success | error | warning | info`
+   * @param {{duration?: number, title?: string}} [opts]
+   * @returns {HTMLElement|null} The mounted toast, or `null` when it was queued.
+   */
+  show(message, type = "info", opts = {}) {
     if (!this.container) this.init();
-    if (!this.container) return;
+    if (!this.container) return null;
 
-    // Cap stack size
-    while (this.container.children.length >= this.max) {
-      this.container.removeChild(this.container.firstElementChild);
+    const spec =
+      message && typeof message === "object"
+        ? { type: "info", ...message }
+        : { message, type, ...opts };
+
+    const toastType = ICON_FOR_TYPE[spec.type] ? spec.type : "info";
+    // Errors linger twice as long (spec 6.25); an explicit duration always wins.
+    const duration =
+      typeof spec.duration === "number"
+        ? spec.duration
+        : toastType === "error"
+          ? ERROR_DURATION
+          : DEFAULT_DURATION;
+
+    const pending = { ...spec, type: toastType, duration };
+
+    // Spec 6.25: extras queue behind the oldest - they never evict it.
+    if (this.live.size >= this.max) {
+      this.queue.push(pending);
+      return null;
     }
+    return this.mount(pending);
+  }
 
+  /**
+   * Create and mount one toast.
+   * @param {{message: string, type: string, duration: number, title?: string}} spec
+   * @returns {HTMLElement}
+   */
+  mount({ message, type, duration, title }) {
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
+    // Errors interrupt; everything else waits its turn.
     toast.setAttribute("role", type === "error" ? "alert" : "status");
 
-    const icon = ICONS[type] || ICONS.info;
     const titleHtml = title ? `<strong>${escapeHtml(title)}</strong><br>` : "";
     toast.innerHTML = `
-      ${icon}
+      ${icon(ICON_FOR_TYPE[type], { className: "toast-icon", size: 18 })}
       <div class="toast-message">${titleHtml}${escapeHtml(message)}</div>
-      <button class="toast-close" aria-label="Dismiss notification">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      <button class="toast-close" type="button" aria-label="Dismiss notification">
+        ${icon("close", { size: 14 })}
       </button>
     `;
 
-    const close = () => this.dismiss(toast);
-    toast.querySelector(".toast-close").addEventListener("click", close);
+    toast.querySelector(".toast-close").addEventListener("click", () => this.dismiss(toast));
 
     this.container.appendChild(toast);
+    this.live.add(toast);
 
     if (duration > 0) {
-      const timer = setTimeout(close, duration);
-      this.timers.set(toast, timer);
+      this.timers.set(
+        toast,
+        setTimeout(() => this.dismiss(toast), duration)
+      );
     }
 
     return toast;
   }
 
+  /**
+   * Dismiss a toast: clear its timer and play the exit animation.
+   * @param {HTMLElement} toast
+   */
   dismiss(toast) {
     const timer = this.timers.get(toast);
     if (timer) clearTimeout(timer);
     this.timers.delete(toast);
-    if (!toast.parentElement) return;
+    if (!this.live.has(toast) || !toast.parentElement) return;
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      toast.remove();
+      this.live.delete(toast);
+      this.pump();
+    };
+
     toast.classList.add("toast-exit");
-    toast.addEventListener("animationend", () => toast.remove(), { once: true });
+    toast.addEventListener("animationend", finish, { once: true });
     // Fallback if animationend never fires
-    setTimeout(() => toast.remove(), 250);
+    setTimeout(finish, EXIT_MS);
+  }
+
+  /** Mount queued toasts while slots remain. */
+  pump() {
+    while (this.queue.length && this.live.size < this.max) {
+      this.mount(this.queue.shift());
+    }
   }
 }
 

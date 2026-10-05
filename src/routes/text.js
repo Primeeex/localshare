@@ -97,6 +97,13 @@ export default function createTextRouter(deps) {
       }
       const { content, label } = req.body || {};
       if (content !== undefined) {
+        // WHY the typeof gate first. `content.length` is undefined for a
+        // number and for a plain object, so `undefined > MAX` is false and the
+        // limit check was silently skipped -- letting `content: {}` or
+        // `content: 12345` be stored and echoed back over SSE verbatim.
+        if (typeof content !== "string") {
+          throw new AppError("content must be a string", "VALIDATION_ERROR", 400);
+        }
         if (content.length > MAX_TEXT_LENGTH) {
           throw new AppError(
             `Content exceeds maximum length of ${MAX_TEXT_LENGTH} characters`,
@@ -107,7 +114,12 @@ export default function createTextRouter(deps) {
         entry.content = content;
         entry.size = content.length;
       }
-      if (label !== undefined) entry.label = label;
+      if (label !== undefined) {
+        if (typeof label !== "string") {
+          throw new AppError("label must be a string", "VALIDATION_ERROR", 400);
+        }
+        entry.label = label;
+      }
       entry.updatedAt = new Date().toISOString();
 
       sse.broadcast(req.params.roomId, "text:updated", { entry });

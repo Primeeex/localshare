@@ -4,6 +4,7 @@
  */
 
 import { asyncRoute } from "../middleware/asyncRoute.js";
+import { AppError } from "../middleware/errorHandler.js";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 
@@ -24,13 +25,38 @@ export default function createEventsRoute(deps) {
     // WHY: EventSource cannot send custom headers, so identity rides query params
     const deviceId = req.query.deviceId || req.headers["x-device-id"] || randomUUID().slice(0, 12);
 
-    // Get or create room
-    // WHY: the room id comes from the URL, so it must stay stable across visits
+    // WHY the HEAD probe: the client cannot read a status code off EventSource,
+    // so it sends a short HEAD request to tell a 401 (room PIN) apart from a
+    // network drop. It must NOT fall through to addClient() below, which would
+    // register a phantom device and hold the response open as a live stream.
+    if (req.method === "HEAD") {
+      res.status(204).end();
+      return;
+    }
+
+    // Get the room. Spec 12 requires getRoom('nonexistent') to throw
+    // ROOM_NOT_FOUND and the client to show "Room not found" and fall back to
+    // the default room.
+    //
+    // WHY this no longer auto-creates: an unauthenticated GET /events is a
+    // write primitive. Auto-creating on connect let ~19 requests fill the room
+    // table permanently, after which POST /api/rooms returned
+    // 409 ROOM_LIMIT_REACHED forever. The empty-room reaper could not reclaim
+    // them either, because each spam room still held its own SSE client.
     let room;
     try {
       room = rooms.getRoom(roomId);
     } catch {
-      room = rooms.createRoom({ id: roomId, name: roomId });
+      const err = new AppError("Room not found", "ROOM_NOT_FOUND", 404, { roomId });
+      res.status(404).json({
+        error: {
+          code: err.code,
+          message: err.message,
+          requestId: req.id,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      return;
     }
 
     // Add SSE client
@@ -69,8 +95,20 @@ export default function createEventsRoute(deps) {
     });
 
     // Handle client disconnect
+    // WHY: a socket error fires before or alongside 'close'. Without this
+    // listener an aborted mobile connection raises an unhandled error and
+    // leaves the response never torn down.
+    res.on("error", () => {
+      sse.removeClient(roomId, deviceId, res);
+      rooms.removeDevice(roomId, deviceId);
+      logger.debug({ roomId, deviceId }, "SSE client errored");
+    });
+
     req.on("close", () => {
-      sse.removeClient(roomId, deviceId);
+      // WHY: 'close' can fire for a socket that has already been superseded by
+      // a reconnecting one, so the room re-checks for a live connection after
+      // its grace period before evicting the device.
+      sse.removeClient(roomId, deviceId, res);
       rooms.removeDevice(roomId, deviceId);
       logger.debug({ roomId, deviceId }, "SSE client disconnected");
     });
@@ -78,72 +116,143 @@ export default function createEventsRoute(deps) {
 }
 
 /**
+ * Adjectives used by {@link generateDeviceName}.
+ * Spec 6.18 requires 50+ adjectives x 50+ animals = 2500+ combinations.
+ */
+const DEVICE_ADJECTIVES = [
+  "Agile",
+  "Amber",
+  "Brave",
+  "Bright",
+  "Calm",
+  "Clever",
+  "Crimson",
+  "Curious",
+  "Dark",
+  "Eager",
+  "Electric",
+  "Fearless",
+  "Fleet",
+  "Gentle",
+  "Golden",
+  "Happy",
+  "Jolly",
+  "Keen",
+  "Kind",
+  "Lucky",
+  "Lunar",
+  "Merry",
+  "Nimble",
+  "Noble",
+  "Open",
+  "Peaceful",
+  "Plucky",
+  "Proud",
+  "Pure",
+  "Quick",
+  "Quiet",
+  "Rapid",
+  "Royal",
+  "Scarlet",
+  "Silent",
+  "Silver",
+  "Smooth",
+  "Soft",
+  "Solar",
+  "Sturdy",
+  "Swift",
+  "Tender",
+  "True",
+  "Vivid",
+  "Warm",
+  "Witty",
+  "Wise",
+  "Yield",
+  "Zesty",
+  "Zen",
+];
+
+/**
+ * Animals used by {@link generateDeviceName}. See {@link DEVICE_ADJECTIVES}.
+ */
+const DEVICE_ANIMALS = [
+  "Alpaca",
+  "Badger",
+  "Bear",
+  "Beaver",
+  "Bison",
+  "Camel",
+  "Capybara",
+  "Chamois",
+  "Cobra",
+  "Crane",
+  "Deer",
+  "Dingo",
+  "Eagle",
+  "Falcon",
+  "Ferret",
+  "Finch",
+  "Fox",
+  "Gecko",
+  "Giraffe",
+  "Goose",
+  "Hawk",
+  "Heron",
+  "Ibex",
+  "Ibis",
+  "Jaguar",
+  "Jay",
+  "Kite",
+  "Koala",
+  "Lark",
+  "Llama",
+  "Lynx",
+  "Manatee",
+  "Marmot",
+  "Meerkat",
+  "Mole",
+  "Moth",
+  "Newt",
+  "Otter",
+  "Owl",
+  "Panda",
+  "Pelican",
+  "Quail",
+  "Rabbit",
+  "Raven",
+  "Rook",
+  "Salmon",
+  "Seal",
+  "Stag",
+  "Swan",
+  "Tapir",
+  "Tiger",
+  "Viper",
+  "Walrus",
+  "Whale",
+  "Wolf",
+  "Wombat",
+  "Yak",
+  "Zebra",
+];
+
+/**
  * Generate a friendly device name from a device ID.
+ *
+ * WHY hash-based: the same deviceId must always resolve to the same name so
+ * a device keeps its identity (and avatar colour) across sessions and rooms.
+ *
  * @param {string} deviceId
  * @returns {string}
  */
 function generateDeviceName(deviceId) {
-  const adjectives = [
-    "Quick",
-    "Brave",
-    "Calm",
-    "Dark",
-    "Eager",
-    "Fast",
-    "Gentle",
-    "Happy",
-    "Kind",
-    "Loud",
-    "Nice",
-    "Open",
-    "Pure",
-    "Quiet",
-    "Rapid",
-    "Soft",
-    "Tender",
-    "Vivid",
-    "Warm",
-    "Yield",
-  ];
-  const animals = [
-    "Fox",
-    "Otter",
-    "Bear",
-    "Wolf",
-    "Deer",
-    "Hawk",
-    "Lynx",
-    "Raven",
-    "Stag",
-    "Swan",
-    "Tiger",
-    "Viper",
-    "Whale",
-    "Zebra",
-    "Crane",
-    "Falcon",
-    "Goose",
-    "Heron",
-    "Ibis",
-    "Jay",
-    "Kite",
-    "Lark",
-    "Moth",
-    "Newt",
-    "Owl",
-    "Panda",
-    "Quail",
-    "Rook",
-    "Salmon",
-    "Trout",
-  ];
   // Use hash of deviceId to pick consistent names
   let hash = 0;
   for (let i = 0; i < deviceId.length; i++) {
     hash = (hash * 31 + deviceId.charCodeAt(i)) >>> 0;
   }
-  const adj = adjectives[hash % adjectives.length];
-  const animal = animals[(hash >> 8) % animals.length];
+  const adj = DEVICE_ADJECTIVES[hash % DEVICE_ADJECTIVES.length];
+  const animal = DEVICE_ANIMALS[(hash >> 8) % DEVICE_ANIMALS.length];
   return `${adj}${animal}`;
 }
 

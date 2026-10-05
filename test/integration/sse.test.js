@@ -131,13 +131,54 @@ describe("sse", () => {
     expect(client.raw).toContain(": ping");
   }, 25000);
 
-  it("creates the room when connecting to an unknown roomId", async () => {
-    const client = open({ roomId: "brand-new-room", deviceId: "dev-creator" });
-    const entry = await client.waitFor("connected", 2000);
-    expect(entry.data.room.id).toBe("brand-new-room");
+  it("answers 404 for an unknown roomId instead of creating it", async () => {
+    // WHY this is the correct behaviour, not a limitation. Spec 12 requires
+    // `getRoom('nonexistent')` to throw ROOM_NOT_FOUND and the client to show
+    // "Room not found" and fall back to the default room.
+    //
+    // Auto-creating on connect made an unauthenticated GET /events a write
+    // primitive: ~19 requests filled the room table permanently, after which
+    // POST /api/rooms returned 409 ROOM_LIMIT_REACHED forever. The empty-room
+    // reaper could not reclaim them either, because each spam room still held
+    // the SSE client that created it.
+    const res = await request(harness.app).get(
+      "/events?roomId=brand-new-room&deviceId=dev-creator",
+      { headers: { Accept: "text/event-stream" } }
+    );
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe("ROOM_NOT_FOUND");
 
-    const res = await request(harness.app).get("/api/rooms/brand-new-room");
-    expect(res.status).toBe(200);
+    // The room must not exist afterwards.
+    const room = await request(harness.app).get("/api/rooms/brand-new-room");
+    expect(room.status).toBe(404);
+  });
+
+  it("cannot be used to exhaust the room table", async () => {
+    // 19 spam connections used to be enough to take room creation offline for
+    // good. Each must now be refused, leaving the table untouched.
+    const before = (await request(harness.app).get("/api/rooms")).body.length;
+    for (let i = 0; i < 19; i += 1) {
+      const res = await request(harness.app).get(`/events?roomId=spam${i}&deviceId=d${i}`);
+      expect(res.status).toBe(404);
+    }
+    const after = (await request(harness.app).get("/api/rooms")).body.length;
+    expect(after).toBe(before);
+
+    // And the app is still able to create rooms.
+    const created = await request(harness.app).post("/api/rooms").send({ name: "Still working" });
+    expect(created.status).toBe(201);
+  });
+
+  it("answers a HEAD probe without registering a device", async () => {
+    // WHY: EventSource exposes no status code, so the client sends a HEAD
+    // request to tell a 401 (room PIN) apart from a network drop. If that
+    // fell through to the normal handler it would open a real stream and add a
+    // phantom device that the user never connected.
+    const res = await request(harness.app).head("/events?roomId=default&deviceId=ghost");
+
+    expect(res.status).toBe(204);
+    const devices = await request(harness.app).get("/api/rooms/default/devices");
+    expect(devices.body.find((d) => d.id === "ghost")).toBeUndefined();
   });
 
   it("registers devices through the room device list", async () => {

@@ -81,15 +81,21 @@ function formatError(err, reqId, isDevelopment) {
   // Known codes pass through; other 4xx app codes stay readable; everything
   // else collapses to INTERNAL_ERROR so fs/system codes never leak.
   const is4xx = err.status >= 400 && err.status < 500;
-  const code = KNOWN_CODES.has(err.code)
-    ? err.code
-    : is4xx && /^[A-Z][A-Z_]*$/.test(err.code || "")
-      ? err.code
-      : "INTERNAL_ERROR";
+  const isKnown = KNOWN_CODES.has(err.code);
+  const isAppCode = is4xx && /^[A-Z][A-Z_]*$/.test(err.code || "");
+  const code = isKnown || isAppCode ? err.code : "INTERNAL_ERROR";
+  // WHY the message is masked too, not just the code. Collapsing only the code
+  // still shipped the raw Node message verbatim, so a filesystem error came
+  // back as `EACCES: permission denied, open '/var/lib/localshare/uploads/
+  // <roomId>/<fileId>.meta.json'` -- disclosing the absolute uploads path, the
+  // room-id directory layout and the on-disk file naming scheme to any client
+  // who can reach a room.
+  const message =
+    isKnown || isAppCode ? err.message || "Internal server error" : "Internal server error";
   const response = {
     error: {
       code,
-      message: err.message || "Internal server error",
+      message,
       requestId: reqId,
       timestamp: new Date().toISOString(),
       ...(err.details || {}),

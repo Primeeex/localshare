@@ -7,7 +7,7 @@ Thanks for your interest in contributing to LocalShare! This document explains h
 Requirements: Node.js >= 18 and npm >= 9.
 
 ```bash
-git clone https://github.com/localshare/localshare.git
+git clone https://github.com/Primeeex/localshare.git
 cd localshare
 npm install
 npm run dev
@@ -86,7 +86,7 @@ Example: `feat/qr-code-shorturl`.
 
 **Never open a public issue for a security vulnerability.**
 
-1. Email **security@localshare.dev** first, or use [GitHub Security Advisories](https://github.com/localshare/localshare/security/advisories/new) to report the issue privately.
+1. Email **security@localshare.dev** first, or use [GitHub Security Advisories](https://github.com/Primeeex/localshare/security/advisories/new) to report the issue privately.
 2. Include the affected version, reproduction steps, and the potential impact.
 3. Give us a reasonable time to investigate and release a fix before any public disclosure.
 

@@ -2,7 +2,7 @@
 <html lang="en" data-theme="system">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>LocalShare</title>
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
     <meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)" />
@@ -34,7 +34,7 @@
          load or a hung request), show it anyway instead of a blank page. */
       setTimeout(function () {
         var app = document.getElementById("app");
-        if (app && app.style.display !== "flex") app.style.display = "flex";
+        if (app && app.hidden) app.hidden = false;
       }, 2500);
     </script>
   </head>
@@ -76,13 +76,7 @@
             autofocus
             aria-describedby="pin-error"
           />
-          <div
-            id="pin-error"
-            class="pin-error"
-            role="alert"
-            aria-live="assertive"
-            style="display: none"
-          ></div>
+          <div id="pin-error" class="pin-error" role="alert" aria-live="assertive" hidden></div>
           <button type="submit" id="pin-submit" class="btn btn-primary btn-lg">Enter</button>
         </form>
       </div>

@@ -52,6 +52,17 @@
   --color-text-secondary-on-subtle: #5a5a63;
   /* Drop overlay label (accent text on 10% tint fails 4.5:1) */
   --color-drop-label: #18181b;
+  /* Drop overlay fills. Pre-computed tints (no multi-stop fill, no
+     color-mix) so the canvas field and the CSS frame always agree on one
+     value. */
+  --color-drop-tint: rgba(37, 99, 235, 0.08);
+  --color-drop-tint-rejected: rgba(220, 38, 38, 0.12);
+  /* One monochrome hover step (menu rows, list rows, icon buttons).
+     Kept as a token so "inactive" and "hover" can never collapse into the
+     same value -- light mode makes --color-bg-elevated and
+     --color-bg-surface the same white, so a hover that steps to
+     --color-bg-surface is invisible. */
+  --color-bg-hover: #f4f4f5;
 
   /* Typography */
   --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -74,7 +85,15 @@
   --weight-medium: 500;
   --weight-semibold: 600;
 
+  /* Letter-spacing. Headings tighten as size grows (13.3); dense mono labels
+     open up a hair so 11px caps stay legible. */
+  --tracking-tight: -0.011em;
+  --tracking-tighter: -0.02em;
+  --tracking-mono: -0.01em;
+  --tracking-wide: 0.02em;
+
   /* Spacing */
+  --space-half: 2px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -86,17 +105,32 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* Border Radius */
+  /* Border Radius -- one scale, no ad-hoc values (13.4 pins 4/6/8/12) */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
+  /* Sheets are the only oversized corner in the app; one step above a modal */
+  --radius-sheet: 14px;
   --radius-full: 9999px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  /* Elevation (spec 13.2: clean utility, no decorative shadow).
+     Exactly two raised tiers so every floating surface looks the same.
+     0 = flat (a 1px hairline does the separation), 1 = resting raised,
+     2 = floating (menu, modal, toast, bottom sheet, skip link).
+     Both shadows are near-neutral: the tint is the surface, never the glow. */
+  --elevation-0: none;
+  --elevation-1: 0 1px 2px rgba(24, 24, 27, 0.06);
+  --elevation-2: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --elevation-3: 0 12px 32px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15);
+  /* Legacy aliases kept so existing call sites stay on the same scale */
+  --shadow-sm: var(--elevation-1);
+  --shadow-md: var(--elevation-2);
+  --shadow-lg: var(--elevation-3);
+
+  /* Focus ring (one ring, one weight, every interactive element) */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
 
   /* Z-Index Scale */
   --z-dropdown: 100;
@@ -106,12 +140,30 @@
   --z-drop-overlay: 9999;
   --z-header: 50;
 
-  /* Transitions */
+  /* Transitions -- spec 13.6 is a hard timing contract, do not retune.
+     The first two are the spec-pinned defaults; the rest exist so no
+     component has to repeat a raw duration/easing pair. */
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease-out;
+  --transition-press: 80ms ease;
+  --transition-drop: 100ms ease;
 
   /* Layout */
   --header-height: 56px;
   --tab-height: 44px;
+  /* Reconnect banner: fixed height so the layout can reserve exactly this
+     band for it (see layout.css) instead of guessing. */
+  --banner-height: 32px;
+  /* Spec P7: minimum touch target on coarse pointers */
+  --touch-target: 44px;
+  /* Swipe-to-delete reveal width (spec 13.1 phone file rows) */
+  --swipe-action-width: 88px;
   --max-width: 900px;
+
+  /* Safe-area insets -- single source of truth for viewport-fit=cover.
+     Every element pinned to a viewport edge reads these, never env() directly. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }

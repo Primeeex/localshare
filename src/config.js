@@ -25,7 +25,7 @@ const DEFAULTS = {
   expiry: parseDuration("24h"),
   maxRooms: 20,
   maxConnections: 500,
-  maxFilesPerRoom: 500,
+  maxFilesPerRoom: 200,
   cleanup: true,
   qr: true,
   logLevel: "info",

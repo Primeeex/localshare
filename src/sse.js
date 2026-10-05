@@ -40,8 +40,10 @@ export class SSEManager {
    * @returns {SSEClient|null}
    */
   addClient(roomId, res, deviceId) {
-    // WHY: enforce max connections to prevent memory exhaustion
-    if (this.getClientCount(roomId) >= this.maxConnections) {
+    // WHY: enforce max connections to prevent memory exhaustion. The budget is
+    // server-wide (PROMPT.md 6.12), not per room, otherwise every room would
+    // get its own full allocation.
+    if (this.getTotalClientCount() >= this.maxConnections) {
       res.writeHead(503, { "Retry-After": "30", "Content-Type": "text/plain" });
       res.end("Server at connection limit. Please retry later.");
       return null;
@@ -75,30 +77,85 @@ export class SSEManager {
   }
 
   /**
-   * Remove a client from a room.
+   * Remove a client's SSE connection from a room.
+   *
+   * WHY: a single device can briefly hold two sockets. The browser
+   * `EventSource` reconnects by opening a *new* connection while the old one is
+   * still tearing down, so a close handler for the dead socket can fire after
+   * its replacement has already registered. Teardown therefore has to remove
+   * exactly the socket that closed, never "the first socket for this device" -
+   * the latter evicts the live replacement and the device then reads as gone
+   * on every other screen while it is still perfectly connected.
+   *
    * @param {string} roomId
    * @param {string} deviceId
+   * @param {import('node:http').ServerResponse} [res] Socket that closed. When
+   *   omitted, falls back to removing the device's first connection.
+   * @returns {number} Number of connections removed
    */
-  removeClient(roomId, deviceId) {
+  removeClient(roomId, deviceId, res) {
     const roomClients = this.clients.get(roomId);
-    if (!roomClients) return;
-    for (const client of roomClients) {
-      if (client.deviceId === deviceId) {
-        roomClients.delete(client);
-        try {
-          client.res.end();
-        } catch {
-          /* connection already closed */
+    if (!roomClients) return 0;
+    let removed = 0;
+
+    if (res) {
+      for (const client of roomClients) {
+        if (client.res === res) {
+          roomClients.delete(client);
+          removed++;
+          break;
         }
-        this.logger.debug({ roomId, deviceId }, "SSE client removed");
-        break;
       }
+    } else {
+      for (const client of roomClients) {
+        if (client.deviceId === deviceId) {
+          roomClients.delete(client);
+          try {
+            client.res.end();
+          } catch {
+            /* connection already closed */
+          }
+          removed++;
+          break;
+        }
+      }
+    }
+
+    if (removed > 0) {
+      this.logger.debug({ roomId, deviceId }, "SSE client removed");
     }
     // Clean up empty rooms
     if (roomClients.size === 0) {
       this.clients.delete(roomId);
       this._stopHeartbeat(roomId);
     }
+    return removed;
+  }
+
+  /**
+   * Whether a device currently holds at least one live connection in a room.
+   * Used to decide whether a disconnecting device is really gone: a reconnect
+   * that has already been accepted must never be treated as a departure.
+   * @param {string} roomId
+   * @param {string} deviceId
+   * @returns {boolean}
+   */
+  hasClient(roomId, deviceId) {
+    const roomClients = this.clients.get(roomId);
+    if (!roomClients) return false;
+    for (const client of roomClients) {
+      if (client.deviceId === deviceId && !this._isDead(client)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Whether a client socket is already torn down.
+   * @param {SSEClient} client
+   * @returns {boolean}
+   */
+  _isDead(client) {
+    return Boolean(client.res.writableEnded || client.res.destroyed);
   }
 
   /**
@@ -155,7 +212,6 @@ export class SSEManager {
         } catch {
           /* connection already closed */
         }
-        break;
       }
     }
   }
@@ -167,6 +223,18 @@ export class SSEManager {
    */
   getClientCount(roomId) {
     return this.clients.get(roomId)?.size || 0;
+  }
+
+  /**
+   * Get the number of connected clients across every room on this server.
+   * @returns {number}
+   */
+  getTotalClientCount() {
+    let total = 0;
+    for (const roomClients of this.clients.values()) {
+      total += roomClients.size;
+    }
+    return total;
   }
 
   /**
@@ -232,12 +300,25 @@ export class SSEManager {
         return;
       }
       const heart = `: ping\n\n`;
-      for (const client of roomClients) {
+      for (const client of [...roomClients]) {
+        // WHY: a socket can die without ever emitting 'close' (an aborted
+        // mobile connection, a killed proxy socket). Reaping it here keeps a
+        // dead device from lingering in every room's device list forever.
+        if (this._isDead(client)) {
+          roomClients.delete(client);
+          this.logger.debug({ roomId, deviceId: client.deviceId }, "SSE zombie client reaped");
+          continue;
+        }
         try {
           client.res.write(heart);
         } catch {
           /* dead client, will be cleaned up */
         }
+      }
+      if (roomClients.size === 0) {
+        clearInterval(interval);
+        this._heartbeatIntervals.delete(roomId);
+        this.clients.delete(roomId);
       }
     }, HEARTBEAT_INTERVAL_MS);
     this._heartbeatIntervals.set(roomId, interval);

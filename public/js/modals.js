@@ -89,7 +89,7 @@ export function openOverlay(sel) {
   // Cancel a pending exit animation so reopening is instant
   window.clearTimeout(closeTimers.get(el));
   el.classList.remove("modal--closing");
-  el.style.display = "flex";
+  el.hidden = false;
 
   beginTracking(el);
   // Focus after paint so the browser lays the overlay out first
@@ -106,18 +106,18 @@ export function closeAll(opts = {}) {
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   document.querySelectorAll(".modal, .bottom-sheet").forEach((m) => {
-    if (m.style.display === "none") return;
+    if (m.hidden) return;
     window.clearTimeout(closeTimers.get(m));
     if (reduced || m.classList.contains("bottom-sheet")) {
       m.classList.remove("modal--closing");
-      m.style.display = "none";
+      m.hidden = true;
       return;
     }
     // WHY: spec 13.6 exit animation is 100ms ease-in before hiding
     m.classList.add("modal--closing");
     const timer = window.setTimeout(() => {
       m.classList.remove("modal--closing");
-      m.style.display = "none";
+      m.hidden = true;
       closeTimers.delete(m);
     }, 100);
     closeTimers.set(m, timer);
@@ -138,5 +138,5 @@ export function closeAll(opts = {}) {
 /** True when any overlay is currently open. */
 export function overlayOpen() {
   if (!activeOverlay) return false;
-  return activeOverlay.style.display !== "none";
+  return !activeOverlay.hidden;
 }

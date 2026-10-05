@@ -17,7 +17,7 @@ let countdownTimer = null;
 
 function showError(message) {
   error.textContent = message;
-  error.style.display = "block";
+  error.hidden = false;
   form.classList.remove("shaking");
   void form.offsetWidth; // restart the shake animation
   form.classList.add("shaking");
@@ -33,12 +33,12 @@ function startLockout(ms) {
       clearInterval(countdownTimer);
       input.disabled = false;
       submit.disabled = false;
-      error.style.display = "none";
+      error.hidden = true;
       input.focus();
       return;
     }
     error.textContent = `Too many failed attempts. Try again in ${remaining}s.`;
-    error.style.display = "block";
+    error.hidden = false;
     remaining -= 1;
   };
   tick();

@@ -3,6 +3,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { RoomManager } from "../../src/rooms.js";
 import { Storage } from "../../src/storage.js";
 import { SSEManager } from "../../src/sse.js";
@@ -26,19 +29,38 @@ describe("rooms", () => {
   let storage;
   let sse;
   let logger;
+  let uploadsDir;
+  let staged;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     const config = testConfig();
+    uploadsDir = await mkdtemp(join(tmpdir(), "localshare-rooms-"));
     logger = createLogger(config);
-    storage = new Storage(config.dir, config.maxFileSize, config.maxStorage);
+    storage = new Storage(uploadsDir, config.maxFileSize, config.maxStorage);
+    await storage.rebuildIndexFromDisk();
     sse = new SSEManager(logger, config.maxConnections);
     rooms = new RoomManager(storage, sse, logger, 5, 100);
+    staged = 0;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     rooms.stop();
     vi.useRealTimers();
+    await rm(uploadsDir, { recursive: true, force: true });
   });
+
+  /**
+   * Stage bytes in the storage staging directory, like the upload route does.
+   * @param {string|Buffer} content
+   * @returns {Promise<string>} The staged path
+   */
+  async function stageFile(_storage, content) {
+    await _storage.ensureTempDir();
+    staged += 1;
+    const path = join(_storage.getTempDir(), `staged-${staged}`);
+    await writeFile(path, content);
+    return path;
+  }
 
   describe("createRoom", () => {
     it("creates a room with default values", () => {
@@ -96,26 +118,55 @@ describe("rooms", () => {
   });
 
   describe("deleteRoom", () => {
-    it("refuses to delete the default room", () => {
-      expect(() => rooms.deleteRoom("default")).toThrow();
-      expect(catchErr(() => rooms.deleteRoom("default"))).toMatchObject({
+    it("refuses to delete the default room", async () => {
+      await expect(rooms.deleteRoom("default")).rejects.toMatchObject({
         code: "CANNOT_DELETE_DEFAULT",
         status: 400,
       });
     });
 
-    it("throws ROOM_NOT_FOUND for a missing room", () => {
-      expect(() => rooms.deleteRoom("nonexistent")).toThrow();
-      expect(catchErr(() => rooms.deleteRoom("nonexistent"))).toMatchObject({
+    it("throws ROOM_NOT_FOUND for a missing room", async () => {
+      await expect(rooms.deleteRoom("nonexistent")).rejects.toMatchObject({
         code: "ROOM_NOT_FOUND",
       });
     });
 
-    it("deletes a custom room", () => {
+    it("deletes a custom room", async () => {
       const room = rooms.createRoom({ name: "Temp" });
-      rooms.deleteRoom(room.id);
+      await rooms.deleteRoom(room.id);
       expect(() => rooms.getRoom(room.id)).toThrow();
       expect(catchErr(() => rooms.getRoom(room.id))).toMatchObject({ code: "ROOM_NOT_FOUND" });
+    });
+
+    it("removes the room directory and releases the storage accounting", async () => {
+      const room = rooms.createRoom({ name: "Files" });
+      await storage.saveFile(
+        room.id,
+        await stageFile(storage, "bye"),
+        "bye.txt",
+        3,
+        "text/plain",
+        "t",
+        null
+      );
+      expect(storage.calculateTotalSize()).toBe(3);
+
+      await rooms.deleteRoom(room.id);
+
+      await expect(stat(join(uploadsDir, room.id))).rejects.toMatchObject({ code: "ENOENT" });
+      expect(storage.calculateTotalSize()).toBe(0);
+      expect(await storage.listFiles(room.id)).toHaveLength(0);
+    });
+
+    it("clears the room's text and clipboard state", async () => {
+      const room = rooms.createRoom({ name: "Notes" });
+      room.textEntries = new Map([["a", { id: "a", content: "hi" }]]);
+      room.clipboardEntries = [{ id: "c", content: "x" }];
+
+      await rooms.deleteRoom(room.id);
+
+      expect(room.textEntries).toBeNull();
+      expect(room.clipboardEntries).toBeNull();
     });
   });
 
@@ -142,6 +193,63 @@ describe("rooms", () => {
       room.lastActivityAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
       rooms.addDevice(room.id, { id: "dev1", name: "Laptop", joinedAt: new Date().toISOString() });
       expect(rooms.shouldAutoDelete(room.id)).toBe(false);
+    });
+
+    it("does not flag an idle room that still holds text entries", () => {
+      const room = rooms.createRoom({ name: "Draft" });
+      room.lastActivityAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+      room.textEntries = new Map([["t1", { id: "t1", content: "still typing" }]]);
+      expect(rooms.shouldAutoDelete(room.id)).toBe(false);
+
+      room.textEntries.clear();
+      expect(rooms.shouldAutoDelete(room.id)).toBe(true);
+    });
+
+    it("does not flag an idle room that still holds clipboard entries", () => {
+      const room = rooms.createRoom({ name: "Clip" });
+      room.lastActivityAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+      room.clipboardEntries = [{ id: "c1", content: "copied" }];
+      expect(rooms.shouldAutoDelete(room.id)).toBe(false);
+
+      room.clipboardEntries = [];
+      expect(rooms.shouldAutoDelete(room.id)).toBe(true);
+    });
+
+    it("does not flag an idle room that still holds files", async () => {
+      const room = rooms.createRoom({ name: "Docs" });
+      room.lastActivityAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+      room.files.set("f1", { id: "f1", originalName: "a.txt", size: 7 });
+      expect(rooms.shouldAutoDelete(room.id)).toBe(false);
+
+      room.files.delete("f1");
+      expect(rooms.shouldAutoDelete(room.id)).toBe(true);
+    });
+
+    it("deletes the files of an auto-deleted room", async () => {
+      const room = rooms.createRoom({ name: "Doomed" });
+      room.lastActivityAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+      await storage.saveFile(
+        room.id,
+        await stageFile(storage, "content"),
+        "a.txt",
+        7,
+        "text/plain",
+        "t",
+        null
+      );
+
+      await rooms._runCleanup();
+
+      expect(() => rooms.getRoom(room.id)).toThrow();
+      await expect(stat(join(uploadsDir, room.id))).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
+    it("tolerates a room that has no text or clipboard state", () => {
+      const room = rooms.createRoom({ name: "Bare" });
+      room.lastActivityAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+      room.textEntries = null;
+      room.clipboardEntries = null;
+      expect(rooms.shouldAutoDelete(room.id)).toBe(true);
     });
   });
 

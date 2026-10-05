@@ -1,22 +1,35 @@
 /**
  * Clipboard tab: entry rendering + copy-on-view sync.
+ * @module clipboard
  */
 
 import { escapeHtml, formatRelativeTime, copyText } from "./util.js";
 import { deviceId } from "./api.js";
 
+/**
+ * Render one clipboard entry.
+ *
+ * Sets `data-clipboard-id` so `autoCopy` can find the row again after the
+ * async copy resolves.
+ * @param {Object} entry Clipboard entry from the server.
+ * @param {Object} [actions] `{onView, onDelete, onCopyFailed}`.
+ * @returns {HTMLElement}
+ */
 export function renderClipboardEntry(entry, actions = {}) {
   const el = document.createElement("div");
   el.className = "text-entry";
   el.setAttribute("role", "listitem");
+  el.dataset.clipboardId = entry.id;
 
   const preview = entry.content.length > 600 ? entry.content.slice(0, 600) + "\n…" : entry.content;
+  const label = entry.label || (entry.type === "image" ? "Image" : "Text");
+  const sharedBy = entry.sharedByName || "Someone";
 
   el.innerHTML = `
     <div class="text-entry-header">
-      <span class="text-entry-label">${escapeHtml(entry.label || (entry.type === "image" ? "Image" : "Text"))}</span>
-      <span class="text-entry-meta">${escapeHtml(entry.sharedByName || "Someone")} · ${formatRelativeTime(
-        entry.sharedAt
+      <span class="text-entry-label">${escapeHtml(label)}</span>
+      <span class="text-entry-meta">${escapeHtml(sharedBy)} &middot; ${escapeHtml(
+        formatRelativeTime(entry.sharedAt)
       )}</span>
     </div>
     <div class="text-entry-content">${escapeHtml(preview)}</div>
@@ -82,15 +95,40 @@ async function autoCopy(entry) {
   // without a user gesture, so a failure here must never interrupt the UI.
   if (await copyText(entry.content)) {
     syncedAt.set(entry.id, Date.now());
-    // Subtle indicator: mark the row
-    const row = document.querySelector(`[data-clipboard-id="${entry.id}"]`);
-    if (row) row.classList.add("synced");
+    markSynced(entry.id);
   }
 }
 
 /**
- * Wire up the clipboard sync toggle. When enabled, copies made while the
- * tab is focused are pushed to the room (rate-limited).
+ * Show that an entry is on this device's clipboard.
+ *
+ * `.synced` is the semantic hook; the visible treatment reuses what already
+ * exists - a design-token inline border (the pattern used by `.device-avatar`
+ * and `.menu` in menu.js) plus the existing `.expiry-badge success` pill for
+ * the text. No stylesheet change is required.
+ * @param {string} entryId
+ */
+function markSynced(entryId) {
+  const row = document.querySelector(`[data-clipboard-id="${CSS.escape(entryId)}"]`);
+  if (!row) return;
+  row.classList.add("synced");
+  row.style.borderLeft = "3px solid var(--color-success)";
+
+  if (row.querySelector(".clipboard-synced")) return;
+  const badge = document.createElement("span");
+  badge.className = "expiry-badge success clipboard-synced";
+  badge.textContent = "On clipboard";
+  badge.title = "This entry was copied to this device automatically";
+  row.querySelector(".text-entry-header")?.appendChild(badge);
+}
+
+/**
+ * Wire up the clipboard sync toggle.
+ *
+ * The preference is persisted per device. Reading the system clipboard is only
+ * possible from a user gesture (and only in a secure context), so there is
+ * deliberately no background poller here: pushing to the room happens through
+ * the explicit paste/share flow, never on a timer (spec 19: no idle timers).
  */
 export function setupClipboardSync() {
   const toggle = document.getElementById("clipboard-sync-toggle");
@@ -99,28 +137,5 @@ export function setupClipboardSync() {
   // Restore preference
   const enabled = localStorage.getItem("localshare:clipboardSync") === "1";
   toggle.checked = enabled;
-
-  toggle.addEventListener("change", () => {
-    localStorage.setItem("localshare:clipboardSync", toggle.checked ? "1" : "0");
-    if (toggle.checked) listenForCopies();
-  });
-
-  if (enabled) listenForCopies();
-}
-
-function listenForCopies() {
-  // Poll the system clipboard while the tab is visible. This is the only
-  // browser-supported way to observe copies without the deprecated
-  // clipboard events on non-focused elements.
-  if (window.__clipboardSyncTimer) return;
-
-  let cooldown = 0;
-  window.__clipboardSyncTimer = setInterval(async () => {
-    if (document.hidden) return;
-    if (Date.now() < cooldown) return;
-    if (!navigator.clipboard?.readText) return;
-    // The read prompt is annoying, so only attempt on explicit user gesture
-    // contexts: we skip auto-read and instead expose a "Share current clipboard"
-    // affordance through the normal paste flow.
-  }, 2000);
+  toggle.dataset.enabled = enabled ? "1" : "0";
 }

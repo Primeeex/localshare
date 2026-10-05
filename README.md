@@ -6,7 +6,7 @@ Share files, text, and clipboard between every device on your Wi-Fi, with one co
 
 [![npm version](https://img.shields.io/npm/v/localshare.svg)](https://www.npmjs.com/package/localshare)
 [![License: MIT](https://img.shields.io/npm/l/localshare.svg)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/localshare/localshare/ci.yml?branch=main&label=CI)](https://github.com/localshare/localshare/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/localshare/localshare/ci.yml?branch=main&label=CI)](https://github.com/Primeeex/localshare/actions/workflows/ci.yml)
 [![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-339933)](https://nodejs.org)
 
 ## Demo
@@ -100,7 +100,7 @@ Options:
                                                          [string] [default: 24h]
       --max-rooms           Maximum number of rooms       [number] [default: 20]
       --max-connections     Maximum SSE connections      [number] [default: 500]
-      --max-files-per-room  Maximum files per room       [number] [default: 500]
+      --max-files-per-room  Maximum files per room       [number] [default: 200]
       --no-cleanup          Disable automatic file cleanup             [boolean]
       --no-qr               Don't print QR code to terminal            [boolean]
       --no-color            Disable terminal colors                    [boolean]
@@ -144,7 +144,7 @@ Every option can be set from the command line, from an environment variable, or 
 | `expiry`          | `--expiry`                | string  | `24h`       | Lifetime applied to new files before cleanup, or `never`.                                               |
 | `maxRooms`        | `--max-rooms`             | number  | `20`        | Maximum number of rooms (1 to 100).                                                                     |
 | `maxConnections`  | `--max-connections`       | number  | `500`       | Maximum simultaneous SSE connections (10 to 5000).                                                      |
-| `maxFilesPerRoom` | `--max-files-per-room`    | number  | `500`       | Maximum files allowed in one room (1 to 10000).                                                         |
+| `maxFilesPerRoom` | `--max-files-per-room`    | number  | `200`       | Maximum files allowed in one room (1 to 10000).                                                         |
 | `cleanup`         | `--no-cleanup` to disable | boolean | `true`      | Run the expiry sweep every 60 seconds.                                                                  |
 | `qr`              | `--no-qr` to disable      | boolean | `true`      | Print a QR code in the startup banner.                                                                  |
 | `colorize`        | `--no-color` to disable   | boolean | `true`      | Colorize the pretty log output.                                                                         |
@@ -268,6 +268,36 @@ location /events {
     proxy_buffering off;
 }
 ```
+
+### Security model and known limits
+
+LocalShare is designed to be reachable from other devices on your LAN, so
+several of its defaults are deliberately permissive. Know these before you put
+it on a network you do not control:
+
+- **CORS is `*`.** Any page on any origin your browser can reach can call the
+  API. This is required for LAN sharing — the mobile client is served from a
+  different host than the API in a reverse-proxy setup. It means a malicious
+  website you visit _can_ read and write rooms. Do not expose the port beyond a
+  trusted local network.
+- **A room PIN is a door, not a wall.** It gates the UI and the room-scoped
+  routes, but the room PIN is transmitted per request and the CORS header above
+  still applies. Use a room PIN whenever the room holds anything you would not
+  hand to every device on the LAN.
+- **PINs must be 4–8 digits.** Weak PINs are rejected at creation (HTTP 400)
+  rather than silently accepted.
+- **PIN guessing is rate-limited** to 10 failures per room per IP per 5 minutes.
+  The limit is charged only on _failed_ guesses, so a correct PIN is never
+  counted against you. Once the budget is spent the room is closed to that IP
+  until the window expires, including for correct PINs — a deliberate
+  fail-closed trade, because verifying a PIN costs a blocking `scrypt` and an
+  unmetered endpoint is a CPU-exhaustion vector.
+- **Uploads are served as attachments unless they are genuinely inert.**
+  Only `text/plain` and a small allowlist of image/video/audio types render
+  inline. HTML, SVG, JS and anything unrecognised download as
+  `application/octet-stream` with `X-Content-Type-Options: nosniff`, so an
+  uploaded file can never execute on the LocalShare origin.
+- **`/events` does not create rooms.** Connecting to an unknown room answers 404. Use `POST /api/rooms` for that.
 
 ## Contributing
 

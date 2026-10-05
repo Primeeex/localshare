@@ -176,9 +176,16 @@ export class RoomManager {
 
   /**
    * Delete a room (cannot delete default).
+   *
+   * WHY async: spec 6.17 makes DELETE /api/rooms/:roomId delete the room *and
+   * all its files*. Deferring the disk sweep to the cleanup job only ever
+   * walked the in-memory index, so uploads/<roomId>/ survived the room and the
+   * quota was never released.
+   *
    * @param {string} roomId
+   * @returns {Promise<void>}
    */
-  deleteRoom(roomId) {
+  async deleteRoom(roomId) {
     if (roomId === DEFAULT_ROOM_ID) {
       throw Object.assign(new Error("Cannot delete the default room"), {
         code: "CANNOT_DELETE_DEFAULT",
@@ -196,9 +203,15 @@ export class RoomManager {
     this.devices.delete(roomId);
     // Remove all transfers
     this.transfers.delete(roomId);
+    // WHY: drop the room's text and clipboard state explicitly so the entries
+    // are released before the room object itself goes away
+    room.textEntries?.clear?.();
+    room.textEntries = null;
+    room.clipboardEntries = null;
+    // WHY: wipe uploads/<roomId>/ recursively and release the quota accounting
+    await this.storage.removeRoomDir(roomId);
     // Remove from index
     this.rooms.delete(roomId);
-    // Clean up files on disk is handled by cleanup job
     this.logger.info({ room: roomId }, "Room deleted");
   }
 
@@ -214,6 +227,16 @@ export class RoomManager {
       this.devices.set(roomId, new Map());
     }
     const devMap = this.devices.get(roomId);
+    const existing = devMap.get(device.id);
+    if (existing) {
+      // WHY: this is a reconnect, not a new visit. Keep the original join time
+      // so "connected 12m ago" stays truthful and the >30s departure rule in
+      // removeDevice() is measured against the real session length.
+      device.joinedAt = existing.joinedAt;
+      device.sessions = (existing.sessions || 1) + 1;
+    } else {
+      device.sessions = 1;
+    }
     devMap.set(device.id, device);
     // Update room last activity
     const room = this.rooms.get(roomId);
@@ -234,17 +257,26 @@ export class RoomManager {
     const device = devMap.get(deviceId);
     // WHY: 5s grace period to handle brief reconnects
     setTimeout(() => {
-      const current = this.devices.get(roomId);
-      if (current && current.has(deviceId)) {
-        current.delete(deviceId);
-        // Check if device was present for > 30s before showing leave toast
-        const joinedAt = new Date(device.joinedAt).getTime();
-        const elapsed = Date.now() - joinedAt;
-        if (elapsed > 30000) {
-          this.sse.broadcast(roomId, "device:left", { deviceId });
-        }
-        this.logger.debug({ roomId, deviceId, elapsed }, "Device removed from room");
+      // WHY: the close handler for a superseded socket fires *after* its
+      // replacement has already registered, so by the time this grace period
+      // expires the device may well be connected again. Evicting it anyway is
+      // what makes a healthy device silently disappear from every other
+      // screen's device list while it is still connected. Only a device with no
+      // live connection left has actually left.
+      if (this.sse.hasClient(roomId, deviceId)) {
+        this.logger.debug({ roomId, deviceId }, "Device reconnected during grace period");
+        return;
       }
+      const current = this.devices.get(roomId);
+      if (!current || !current.has(deviceId)) return;
+      current.delete(deviceId);
+      // Check if device was present for > 30s before showing leave toast
+      const joinedAt = new Date(device.joinedAt).getTime();
+      const elapsed = Date.now() - joinedAt;
+      if (elapsed > 30000) {
+        this.sse.broadcast(roomId, "device:left", { deviceId, name: device.name });
+      }
+      this.logger.debug({ roomId, deviceId, elapsed }, "Device removed from room");
     }, 5000);
   }
 
@@ -383,8 +415,13 @@ export class RoomManager {
     if (!room) return false;
     const deviceCount = (this.devices.get(roomId) || new Map()).size;
     const fileCount = room.files.size;
-    // Auto-delete if idle (no devices and no files) for 30 minutes
-    if (deviceCount === 0 && fileCount === 0) {
+    // WHY spec 6.17: a room is auto-deleted only when files AND text entries
+    // AND devices are all zero. Ignoring text/clipboard reaped rooms that
+    // still held live content.
+    const textCount = room.textEntries?.size || 0;
+    const clipboardCount = room.clipboardEntries?.length || 0;
+    // Auto-delete if idle (no devices, no files, no text, no clipboard) for 30 minutes
+    if (deviceCount === 0 && fileCount === 0 && textCount === 0 && clipboardCount === 0) {
       const idleTime = Date.now() - new Date(room.lastActivityAt).getTime();
       return idleTime > AUTO_DELETE_IDLE_MS;
     }
@@ -395,17 +432,28 @@ export class RoomManager {
    * Start the auto-cleanup interval.
    */
   _startCleanup() {
-    this._cleanupInterval = setInterval(() => this._runCleanup(), 60000);
+    // WHY: the sweep is async now (deleting a room removes its files), so the
+    // timer callback swallows its own rejection instead of leaking one.
+    this._cleanupInterval = setInterval(() => {
+      this._runCleanup().catch((err) => {
+        this.logger.warn({ error: err.message }, "Room cleanup sweep failed");
+      });
+    }, 60000);
   }
 
   /**
    * Run the auto-cleanup sweep.
+   * @returns {Promise<void>}
    */
-  _runCleanup() {
+  async _runCleanup() {
     for (const roomId of this.rooms.keys()) {
-      if (this.shouldAutoDelete(roomId)) {
+      if (!this.shouldAutoDelete(roomId)) continue;
+      try {
         this.logger.info({ room: roomId }, "Auto-deleting idle room");
-        this.deleteRoom(roomId);
+        await this.deleteRoom(roomId);
+      } catch (err) {
+        // WHY: one undeletable room must not abort the whole sweep
+        this.logger.warn({ room: roomId, error: err.message }, "Failed to auto-delete room");
       }
     }
   }

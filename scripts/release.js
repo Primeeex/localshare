@@ -101,7 +101,7 @@ function updateChangelog(text, version, date) {
   if (!new RegExp(`^\\[${version}\\]:`, "m").test(out)) {
     const prevMatch = out.match(/^\[(\d+\.\d+\.\d+)\]:\s+(\S+?)v\d+\.\d+\.\d+$/m);
     const compareBase = prevMatch ? prevMatch[1] : version;
-    out = `${out.replace(/\n+$/, "")}\n[${version}]: ${`https://github.com/localshare/localshare/compare/v${compareBase}...v${version}`}\n`;
+    out = `${out.replace(/\n+$/, "")}\n[${version}]: ${`https://github.com/Primeeex/localshare/compare/v${compareBase}...v${version}`}\n`;
   }
   return out;
 }

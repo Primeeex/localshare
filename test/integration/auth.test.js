@@ -118,7 +118,11 @@ describe("auth", () => {
     const shell = await agent.get("/");
     expect(shell.status).toBe(200);
     expect(shell.text).toContain('id="app"');
-    expect(shell.text).not.toContain("Enter PIN");
+    // WHY the root id rather than the "Enter PIN" string: that text was a
+    // proxy for "this is the PIN gate page", but the app shell now legitimately
+    // ships its own room-PIN dialog carrying the same placeholder text. The
+    // gate's root element is the unambiguous marker.
+    expect(shell.text).not.toContain('id="pin-page"');
 
     const info = await agent.get("/api/server/info");
     expect(info.status).toBe(200);

@@ -14,6 +14,9 @@ html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
+  /* Anchor jumps and scrollIntoView land below the sticky header AND below the
+     reconnect banner, so a focused element is never hidden behind either. */
+  scroll-padding-top: calc(var(--header-height) + var(--banner-height) + var(--space-2));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -33,6 +36,13 @@ body {
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* viewport-fit=cover: the notch / rounded corners must never clip content.
+     Keeping the insets on body means every in-flow surface (header, tabs,
+     main, footer) is pushed clear without any of them growing. */
+  padding-top: var(--safe-top);
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
 }
 
 button,
@@ -74,6 +84,51 @@ h3 {
   text-wrap: balance;
 }
 
+/* Typography craft: headings tighten as they grow and get a display leading.
+   Body copy keeps the 1.6 leading from the base rule -- a text utility is not
+   a poster, so readability wins over density. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+h1,
+h2 {
+  letter-spacing: var(--tracking-tighter);
+}
+
+/* Numbers must not jitter while they tick. Every element that shows a
+   size, count, duration, speed or byte total opts in here; the monospace
+   stack (spec 13.3) already gives digit shapes a fixed advance width. */
+.file-meta,
+.file-name,
+.expiry-badge,
+.text-entry-meta,
+.upload-row-meta,
+.upload-row-speed,
+.upload-row-eta,
+.device-meta,
+.statusbar,
+.preview-meta,
+.url-code,
+kbd {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reduced motion (PROMPT.md:1027): no smooth scrolling, no script-driven
+   animated backgrounds. The global duration override lives in components.css;
+   this rule covers the root-level behaviours that have no component. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 /* Touch: kill the 300ms double-tap zoom delay and flash a deliberate,
    on-brand tap highlight instead of the UA default gray */
 a,
@@ -91,9 +146,18 @@ ol {
 }
 
 img,
-svg {
+svg,
+canvas {
   display: block;
   max-width: 100%;
+}
+
+/* Canvases are decorative instrumentation (drop field, throughput sparkline,
+   presence stack). They are sized by JS, never by layout, and never take a
+   pointer. Keeping this in the reset means a canvas can never accidentally
+   introduce a baseline gap into a row or the header. */
+canvas {
+  pointer-events: none;
 }
 
 /* Screen reader only utility */
@@ -124,6 +188,7 @@ svg {
   box-shadow: var(--shadow-md);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-tight);
   transition: top var(--transition-fast);
 }
 
@@ -131,10 +196,12 @@ svg {
   top: var(--space-2);
 }
 
-/* Focus styles */
+/* Focus styles -- one ring, one weight, one offset for the whole app.
+   The ring is the single loudest accent in the UI, which is exactly why
+   nothing else is allowed to be that loud. */
 :focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--color-accent);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /* Selection color */
@@ -142,3 +209,6 @@ svg {
   background-color: var(--color-accent-subtle);
   color: var(--color-accent);
 }
+
+/* Spec 6.2 / PROMPT.md:451: never block browser zoom or pinch. Only the
+   double-tap delay is removed, above, via touch-action: manipulation. */

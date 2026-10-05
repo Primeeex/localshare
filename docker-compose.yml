@@ -1,11 +1,19 @@
-version: "3.8"
 services:
   localshare:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: localshare/localshare:latest
     ports:
       - "3000:3000"
     volumes:
-      - ./uploads:/app/uploads
+      - ./uploads:/app/uploads:Z
+      # WHY the source mount: without it the container serves the CSS/JS baked
+      # into the image at build time, so every edit in the working tree is
+      # silently ignored and the site looks frozen on whatever was last built.
+      # Mounting ./public makes a plain refresh pick up front-end changes with
+      # no rebuild; server-side changes still need `docker compose up -d --build`.
+      - ./public:/app/public:Z
     environment:
       - LOCALSHARE_PORT=3000
     restart: unless-stopped

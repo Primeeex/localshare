@@ -3,7 +3,7 @@
  * Handles connection, reconnection with backoff, and event dispatch.
  */
 
-import { deviceId, deviceName } from "./api.js";
+import { deviceId, deviceName, getRoomPin } from "./api.js";
 
 export class SSEClient {
   /**
@@ -34,6 +34,12 @@ export class SSEClient {
       deviceId,
       deviceName: deviceName || "Unknown",
     });
+    // WHY the query param: EventSource cannot set request headers, and the
+    // server accepts `?roomPin=` as the fallback channel for exactly this
+    // reason. Without it a PIN room's stream 401s, `onerror` fires, and the
+    // backoff loop below reconnects forever - the "connection lost" hang.
+    const roomPin = getRoomPin(this.roomId);
+    if (roomPin) params.set("roomPin", roomPin);
     const url = `/events?${params}`;
 
     const source = new EventSource(url, {
@@ -48,11 +54,31 @@ export class SSEClient {
       this.retryMs = 1000;
     };
 
-    source.onerror = () => {
+    source.onerror = async () => {
       // EventSource reconnects automatically unless closed, but we manage
       // our own backoff so we close and reopen manually.
       source.close();
       if (this.closed) return;
+
+      // WHY the probe: EventSource exposes no status code, so a 401 (wrong or
+      // missing room PIN) is indistinguishable from a network drop. Retrying it
+      // on the backoff loop is what produced "Connection lost" that never
+      // recovers - every attempt was guaranteed to fail again. A same-origin
+      // HEAD tells us which case we are in before we schedule a retry.
+      const failure = await this._classifyFailure();
+      if (failure === "locked") {
+        // Do NOT schedule a retry: the retry cannot succeed until the user
+        // supplies a PIN, and switchRoom() opens a fresh stream afterwards.
+        this._emit("locked", { roomId: this.roomId });
+        return;
+      }
+      if (failure === "notfound") {
+        // Equally un-retryable: no amount of waiting makes the room exist.
+        // Stop the loop and let the app show "Room not found" and fall back.
+        this._emit("notfound", { roomId: this.roomId });
+        return;
+      }
+
       this._emit("disconnected");
       this.reconnectTimer = setTimeout(() => this.connect(), this.retryMs);
       this.retryMs = Math.min(this.retryMs * 2, this.maxRetryMs);
@@ -70,6 +96,57 @@ export class SSEClient {
           console.error(`SSE handler error for "${event}":`, err);
         }
       });
+    }
+  }
+
+  /**
+   * Ask the server whether the stream was refused because of a room PIN.
+   *
+   * Uses a same-origin fetch with an AbortController so the long-lived stream
+   * never actually opens here. A network failure is treated as "not denied" so
+   * a flaky LAN still gets its normal reconnect behaviour.
+   * @returns {Promise<boolean>}
+   */
+  /**
+   * Classify a failed stream.
+   *
+   * WHY more than a boolean: `EventSource` exposes no status code, so a 401
+   * (wrong/missing room PIN) is indistinguishable from a network drop -- which
+   * is what produced "Connection lost" that never recovers, because every
+   * retry was guaranteed to fail again. A same-origin HEAD resolves it.
+   *
+   * A 404 matters for the same reason: /events no longer auto-creates unknown
+   * rooms (an unauthenticated GET must not be a room-creation primitive), so
+   * joining a room that was never created now fails permanently. Without this
+   * the client would retry that 404 on the backoff loop until the page died.
+   *
+   * @returns {Promise<"locked"|"notfound"|"network">}
+   */
+  async _classifyFailure() {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    try {
+      const params = new URLSearchParams({
+        roomId: this.roomId,
+        deviceId,
+        deviceName: deviceName || "Unknown",
+        probe: "1",
+      });
+      const roomPin = getRoomPin(this.roomId);
+      if (roomPin) params.set("roomPin", roomPin);
+      const res = await fetch(`/events?${params}`, {
+        method: "HEAD",
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      if (res.status === 401) return "locked";
+      if (res.status === 404) return "notfound";
+      return "network";
+    } catch {
+      // Aborted, offline, or CORS: not an auth problem, so keep reconnecting.
+      return "network";
+    } finally {
+      clearTimeout(timer);
     }
   }
 

@@ -50,5 +50,5 @@ LocalShare adheres to Semantic Versioning.
 
 See [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
-[Unreleased]: https://github.com/localshare/localshare/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/localshare/localshare/releases/tag/v1.0.0
+[Unreleased]: https://github.com/Primeeex/localshare/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Primeeex/localshare/releases/tag/v1.0.0

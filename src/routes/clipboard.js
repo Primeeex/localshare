@@ -76,7 +76,11 @@ export default function createClipboardRouter(deps) {
       room.clipboardEntries.push(entry);
       room.lastActivityAt = new Date().toISOString();
 
-      sse.broadcast(req.params.roomId, "clipboard:updated", { entry });
+      // WHY both keys: spec 6.12 pins `clipboard:updated` to
+      // `{ clipboard: ClipboardEntry }`, while the shipped browser client
+      // reads `d.entry`. Emitting both keeps the spec shape correct without
+      // requiring a client change.
+      sse.broadcast(req.params.roomId, "clipboard:updated", { clipboard: entry, entry });
       logger.info({ roomId: req.params.roomId, entryId: entry.id }, "Clipboard entry shared");
       res.status(201).json(entry);
     })

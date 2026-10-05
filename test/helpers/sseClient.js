@@ -9,9 +9,10 @@ import http from "node:http";
  * Connect to an SSE endpoint and collect named events.
  * @param {string} baseUrl - e.g. http://127.0.0.1:3000
  * @param {Object} params - Query params (roomId, deviceId, deviceName)
+ * @param {Object} [extraHeaders] - Extra request headers (e.g. X-Room-Pin)
  * @returns {{ events: Array<{event: string, data: Object}>, waitFor: Function, raw: string, close: Function }}
  */
-export function connectSSE(baseUrl, params = {}) {
+export function connectSSE(baseUrl, params = {}, extraHeaders = {}) {
   const url = new URL("/events", baseUrl);
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
@@ -31,7 +32,7 @@ export function connectSSE(baseUrl, params = {}) {
       hostname: url.hostname,
       port: url.port,
       path: `${url.pathname}?${url.searchParams.toString()}`,
-      headers: { Accept: "text/event-stream" },
+      headers: { Accept: "text/event-stream", ...extraHeaders },
     },
     (res) => {
       state.statusCode = res.statusCode;
@@ -76,6 +77,28 @@ export function connectSSE(baseUrl, params = {}) {
     state.closed = true;
     state.req.destroy();
   };
+
+  /**
+   * Resolve once the server has sent response headers.
+   * @param {number} [timeoutMs=5000]
+   * @returns {Promise<number>} The response status code
+   */
+  state.waitForResponse = (timeoutMs = 5000) =>
+    new Promise((resolve, reject) => {
+      if (state.statusCode !== null) return resolve(state.statusCode);
+      const timer = setTimeout(
+        () => reject(new Error("Timed out waiting for the SSE response headers")),
+        timeoutMs
+      );
+      state.req.on("response", () => {
+        // The statusCode is only assigned in the http.get callback, which runs
+        // after this listener, so defer to a microtask-plus-tick.
+        setImmediate(() => {
+          clearTimeout(timer);
+          resolve(state.statusCode);
+        });
+      });
+    });
 
   return state;
 }

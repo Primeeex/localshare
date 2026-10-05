@@ -102,12 +102,13 @@ describe("auth", () => {
       const result = checkLockout("5.5.5.5");
       expect(result.locked).toBe(false);
       expect(state.failures).toBe(0);
-      expect(recordFailedAttempt("5.5.5.5")).toMatchObject({ locked: false, retriesLeft: 2 });
+      // The IP already used its stage-1 budget of 3, so it is back to 5
+      expect(recordFailedAttempt("5.5.5.5")).toMatchObject({ locked: false, retriesLeft: 4 });
     });
 
     it("escalates the lockout duration on a repeated lockout", () => {
       const ip = "7.7.7.7";
-      // First lockout
+      // First lockout after the stage-1 budget of 3 attempts
       recordFailedAttempt(ip);
       recordFailedAttempt(ip);
       const first = recordFailedAttempt(ip);
@@ -119,22 +120,54 @@ describe("auth", () => {
       getRateLimit(ip).lockedUntil = Date.now() - 1;
       checkLockout(ip);
 
-      // Second lockout escalates to 5 minutes
-      recordFailedAttempt(ip);
-      recordFailedAttempt(ip);
+      // Second lockout escalates to 5 minutes, and spec 12 requires FIVE
+      // further attempts at this stage rather than three
+      expect(recordFailedAttempt(ip).retriesLeft).toBe(4);
+      expect(recordFailedAttempt(ip).retriesLeft).toBe(3);
+      expect(recordFailedAttempt(ip).retriesLeft).toBe(2);
+      expect(recordFailedAttempt(ip).retriesLeft).toBe(1);
       const second = recordFailedAttempt(ip);
       expect(second.locked).toBe(true);
       expect(second.lockoutDuration).toBe(300000);
 
-      // Third lockout is permanent
+      // Third lockout escalates again (5 min x 4) and, critically, is NOT
+      // permanent. It used to set lockedUntil = Infinity, so 3 + 5 + 5 = 13
+      // wrong PINs from one IP locked that IP out with no expiry and no unlock
+      // path except restarting the process. Behind Docker every LAN client
+      // shares one gateway `req.ip`, which made that a permanent, server-wide
+      // denial of service triggerable by any unauthenticated caller.
       getRateLimit(ip).lockedUntil = Date.now() - 1;
       checkLockout(ip);
-      recordFailedAttempt(ip);
-      recordFailedAttempt(ip);
+      for (let i = 0; i < 4; i += 1) recordFailedAttempt(ip);
       const third = recordFailedAttempt(ip);
       expect(third.locked).toBe(true);
-      expect(third.permanent).toBe(true);
-      expect(checkLockout(ip).remainingMs).toBe(Infinity);
+      expect(third.lockoutDuration).toBe(300000 * 4);
+      expect(third.permanent).toBeUndefined();
+
+      // The lock must actually expire instead of lasting forever.
+      const during = checkLockout(ip);
+      expect(during.remainingMs).toBeLessThanOrEqual(300000 * 4);
+      expect(during.remainingMs).not.toBe(Infinity);
+      getRateLimit(ip).lockedUntil = Date.now() - 1;
+      checkLockout(ip);
+      expect(checkLockout(ip).locked).toBe(false);
+    });
+
+    it("does not lock out on the 4th and 5th attempts of a later stage", () => {
+      const ip = "6.6.6.6";
+      // Reach stage 2
+      recordFailedAttempt(ip);
+      recordFailedAttempt(ip);
+      recordFailedAttempt(ip);
+      getRateLimit(ip).lockedUntil = Date.now() - 1;
+      checkLockout(ip);
+
+      expect(recordFailedAttempt(ip).locked).toBe(false);
+      expect(recordFailedAttempt(ip).locked).toBe(false);
+      expect(recordFailedAttempt(ip).locked).toBe(false);
+      expect(recordFailedAttempt(ip).locked).toBe(false);
+      // Only the 5th attempt of stage 2 triggers the lockout
+      expect(recordFailedAttempt(ip).locked).toBe(true);
     });
 
     it("clears all state on clearRateLimits()", () => {

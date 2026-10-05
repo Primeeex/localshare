@@ -43,19 +43,25 @@
   --color-neutral-fg: #e4e4e7;
   --color-text-secondary-on-subtle: #b4b4be;
   --color-drop-label: #fafafa;
+  --color-drop-tint: rgba(59, 130, 246, 0.1);
+  --color-drop-tint-rejected: rgba(239, 68, 68, 0.14);
+  /* Hover step must differ from --color-bg-surface AND --color-bg-elevated,
+     otherwise a hovered menu row reads as "no menu row" */
+  --color-bg-hover: #27272a;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --elevation-2: 0 8px 24px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --elevation-3: 0 16px 40px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-sm: var(--elevation-1);
+  --shadow-md: var(--elevation-2);
+  --shadow-lg: var(--elevation-3);
 
   /* Native scrollbars/form controls follow the dark palette */
   color-scheme: dark;
 }
 
-/* Toasts use the spec 13.4 shadow */
-[data-theme="dark"] .toast {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-}
+/* Toasts use the elevation-2 shadow; --shadow-lg already resolves per theme,
+   so this override would only re-introduce a hardcoded third value. */
 
 /* Dark mode QR code needs white bg always */
 .modal-qr .qr-container {
@@ -110,19 +116,39 @@
     --color-neutral-fg: #e4e4e7;
     --color-text-secondary-on-subtle: #b4b4be;
     --color-drop-label: #fafafa;
+    --color-drop-tint: rgba(59, 130, 246, 0.1);
+    --color-drop-tint-rejected: rgba(239, 68, 68, 0.14);
+    --color-bg-hover: #27272a;
 
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --elevation-2: 0 8px 24px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+    --elevation-3: 0 16px 40px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-sm: var(--elevation-1);
+    --shadow-md: var(--elevation-2);
+    --shadow-lg: var(--elevation-3);
 
     color-scheme: dark;
   }
 
-  [data-theme="system"] .toast {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  }
-
   [data-theme="system"] .qr-container {
     background: white !important;
+  }
+}
+
+/* Spec 6.10 / WCAG 1.4.11: prefers-contrast: more needs dark parity.
+   WHY this block exists: the light-mode override lives in components.css on
+   :root, which ties with [data-theme="dark"] on specificity and loses on
+   source order -- so before this, "more contrast" did nothing in dark mode.
+   [data-theme="system"] is listed because dark.css owns the
+   prefers-color-scheme fallback for it as well. */
+@media (prefers-contrast: more) {
+  [data-theme="dark"],
+  [data-theme="system"] {
+    --color-border: #71717a;
+    --color-border-strong: #a1a1aa;
+    --color-border-control: #a1a1aa;
+    --color-text-secondary: #d4d4d8;
+    --color-text-disabled: #a1a1aa;
+    --color-neutral-fg: #fafafa;
   }
 }

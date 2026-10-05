@@ -19,11 +19,18 @@ function looksLikeCode(text) {
 
 /**
  * Render a text entry card.
+ *
+ * `data-entry-id` is the key `app.js` uses for keyed diffing and swipe-to-
+ * delete; keep the attribute name in sync with app.js.
+ * @param {Object} entry Text entry from the server.
+ * @param {Object} [actions] `{onCopied, onCopyFailed, onDelete}`.
+ * @returns {HTMLElement}
  */
 export function renderTextEntry(entry, actions = {}) {
   const el = document.createElement("div");
   el.className = "text-entry";
   el.setAttribute("role", "listitem");
+  el.dataset.entryId = entry.id;
 
   const isCode = looksLikeCode(entry.content);
   const preview =

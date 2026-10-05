@@ -2,7 +2,7 @@
 <html lang="en" data-theme="system">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>LocalShare</title>
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
     <meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)" />
@@ -34,17 +34,77 @@
          load or a hung request), show it anyway instead of a blank page. */
       setTimeout(function () {
         var app = document.getElementById("app");
-        if (app && app.style.display !== "flex") app.style.display = "flex";
+        if (app && app.hidden) app.hidden = false;
       }, 2500);
     </script>
   </head>
   <body>
+    <!-- Icon sprite.
+         Inline path data repeated a dozen times is the fastest way for an
+         interface to rot: one hand-edit and the copies drift apart. This
+         keeps every glyph single-sourced and still needs no JavaScript,
+         which spec 1477 requires for anything markup alone could express.
+         Each symbol keeps the viewBox its original svg element declared. -->
+    <svg class="icon-sprite" aria-hidden="true" focusable="false" hidden>
+      <symbol id="i-logo" viewBox="0 0 48 48">
+        <rect width="48" height="48" rx="12" fill="var(--color-accent)" />
+        <path
+          d="M14 20C14 17.7909 15.7909 16 18 16H30C32.2091 16 34 17.7909 34 20V24H36C37.1046 24 38 24.8954 38 26V34C38 35.1046 37.1046 36 36 36H12C10.8954 36 10 35.1046 10 34V26C10 24.8954 10.8954 24 12 24H14V20Z"
+          fill="white"
+        />
+        <circle cx="24" cy="29" r="2" fill="white" />
+      </symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24">
+        <line x1="3" y1="12" x2="21" y2="12" />
+        <line x1="3" y1="6" x2="21" y2="6" />
+        <line x1="3" y1="18" x2="21" y2="18" />
+      </symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+      </symbol>
+      <symbol id="i-devices" viewBox="0 0 24 24">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </symbol>
+      <symbol id="i-clipboard" viewBox="0 0 24 24">
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+        <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+      </symbol>
+      <symbol id="i-monitor" viewBox="0 0 24 24">
+        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+        <line x1="8" y1="21" x2="16" y2="21" />
+        <line x1="12" y1="17" x2="12" y2="21" />
+      </symbol>
+      <symbol id="i-download" viewBox="0 0 24 24">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </symbol>
+      <symbol id="i-close" viewBox="0 0 24 24">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24">
+        <line x1="22" y1="2" x2="11" y2="13" />
+        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+      </symbol>
+      <symbol id="i-reconnect-ring" viewBox="0 0 48 48">
+        <circle class="disconnected-ring-track" cx="24" cy="24" r="20" />
+        <circle class="disconnected-ring-head" cx="24" cy="24" r="20" />
+      </symbol>
+    </svg>
     <a href="#main" class="skip-link">Skip to content</a>
 
     <!-- Main App -->
-    <div id="app" style="display: none">
+    <div id="app" hidden>
       <!-- Drag Drop Overlay -->
       <div id="drop-overlay" class="drop-overlay drop-overlay--inactive" aria-hidden="true">
+        <canvas id="drop-field" class="drop-field" aria-hidden="true" focusable="false"></canvas>
         <div class="drop-overlay-content">
           <svg
             class="drop-overlay-icon"
@@ -76,7 +136,7 @@
       <!-- Header -->
       <header class="header">
         <div class="header-left">
-          <a href="#" class="header-logo" aria-label="LocalShare home">
+          <a href="/" class="header-logo" aria-label="LocalShare home">
             <svg
               width="28"
               height="28"
@@ -85,12 +145,7 @@
               aria-hidden="true"
               focusable="false"
             >
-              <rect width="48" height="48" rx="12" fill="var(--color-accent)" />
-              <path
-                d="M14 20C14 17.7909 15.7909 16 18 16H30C32.2091 16 34 17.7909 34 20V24H36C37.1046 24 38 24.8954 38 26V34C38 35.1046 37.1046 36 36 36H12C10.8954 36 10 35.1046 10 34V26C10 24.8954 10.8954 24 12 24H14V20Z"
-                fill="white"
-              />
-              <circle cx="24" cy="29" r="2" fill="white" />
+              <use href="#i-logo" />
             </svg>
             <h1 class="header-title">LocalShare</h1>
           </a>
@@ -110,12 +165,51 @@
           </button>
         </div>
         <div class="header-right">
-          <div
-            id="device-avatars"
-            class="device-avatars"
-            role="group"
-            aria-label="Connected devices"
-          ></div>
+          <!-- Spec 6.18: the presence cluster is a button that opens the full
+               device list. The canvas draws the stack so the header stays a
+               fixed height no matter how many devices are in the room.
+
+               WHY the wrapper: the popover below is absolutely positioned, so
+               it needs a positioned ancestor. The popover used to be a SIBLING
+               of <header> inside a static #app, which left it with the initial
+               containing block as its reference - `top: 100%` then meant
+               "one viewport-height down the document", so it rendered far
+               below the page and stretched the scroll area. Anchoring it to
+               this relative wrapper keeps it directly under the button. The
+               dialog cannot live inside the <button> itself: nested interactive
+               content is invalid and clicks would re-trigger the toggle. -->
+          <div class="presence-wrap">
+            <button
+              id="device-avatars"
+              class="device-avatars"
+              type="button"
+              aria-label="Connected devices"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+              aria-controls="device-popover"
+            >
+              <canvas
+                id="presence-canvas"
+                class="presence-canvas"
+                aria-hidden="true"
+                focusable="false"
+              ></canvas>
+            </button>
+
+            <div
+              id="device-popover"
+              class="device-popover"
+              role="dialog"
+              aria-label="Devices in this room"
+              hidden
+            >
+              <div class="device-popover-header">
+                <span class="device-popover-title">In this room</span>
+                <span id="device-popover-count" class="device-popover-count"></span>
+              </div>
+              <div id="device-popover-list" class="device-popover-list" role="list"></div>
+            </div>
+          </div>
           <button
             id="theme-toggle"
             class="btn btn-ghost btn-icon"
@@ -155,7 +249,6 @@
               stroke-width="2"
               stroke-linecap="round"
               stroke-linejoin="round"
-              style="display: none"
               aria-hidden="true"
               focusable="false"
             >
@@ -182,9 +275,7 @@
               aria-hidden="true"
               focusable="false"
             >
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="18" x2="21" y2="18" />
+              <use href="#i-menu" />
             </svg>
           </button>
         </div>
@@ -213,7 +304,7 @@
             aria-hidden="true"
             focusable="false"
           >
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            <use href="#i-folder" />
           </svg>
           Files
         </button>
@@ -238,10 +329,7 @@
             aria-hidden="true"
             focusable="false"
           >
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            <use href="#i-devices" />
           </svg>
           Text
         </button>
@@ -266,8 +354,7 @@
             aria-hidden="true"
             focusable="false"
           >
-            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+            <use href="#i-clipboard" />
           </svg>
           Clipboard
         </button>
@@ -292,9 +379,7 @@
             aria-hidden="true"
             focusable="false"
           >
-            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-            <line x1="8" y1="21" x2="16" y2="21" />
-            <line x1="12" y1="17" x2="12" y2="21" />
+            <use href="#i-monitor" />
           </svg>
           Devices
         </button>
@@ -355,7 +440,7 @@
           </div>
 
           <!-- Upload Queue -->
-          <div id="upload-queue" class="upload-queue" style="display: none"></div>
+          <div id="upload-queue" class="upload-queue" hidden></div>
 
           <!-- File List Header -->
           <div class="file-list-header">
@@ -365,10 +450,15 @@
               type="search"
               id="file-search"
               class="input input-search"
-              placeholder="Search files"
+              placeholder="Search by name…"
               autocomplete="off"
             />
-            <button id="download-all-btn" class="btn btn-primary btn-sm" disabled>
+            <button
+              id="download-all-btn"
+              class="btn btn-primary btn-sm"
+              title="No files to download"
+              disabled
+            >
               <svg
                 width="14"
                 height="14"
@@ -381,9 +471,7 @@
                 aria-hidden="true"
                 focusable="false"
               >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
+                <use href="#i-download" />
               </svg>
               Download All
             </button>
@@ -399,7 +487,7 @@
             aria-relevant="additions text"
           >
             <!-- Empty state -->
-            <div class="empty-state" id="file-empty">
+            <div class="empty-state" role="presentation" id="file-empty">
               <svg
                 width="48"
                 height="48"
@@ -409,13 +497,10 @@
                 stroke-width="1"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                style="opacity: 0.4"
                 aria-hidden="true"
                 focusable="false"
               >
-                <path
-                  d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-                />
+                <use href="#i-folder" />
               </svg>
               <p>No files yet</p>
               <p class="empty-sub">Drag files here or click "Upload" to get started</p>
@@ -430,7 +515,7 @@
           role="tabpanel"
           aria-labelledby="tab-btn-text"
           tabindex="0"
-          style="display: none"
+          hidden
         >
           <div class="text-share">
             <label for="text-content" class="sr-only">Share text</label>
@@ -447,7 +532,7 @@
                 type="text"
                 id="text-label"
                 class="input"
-                placeholder="Label (optional)"
+                placeholder="Optional label"
                 maxlength="64"
               />
               <button id="share-text-btn" class="btn btn-primary">Share Text</button>
@@ -463,7 +548,7 @@
             aria-live="polite"
             aria-relevant="additions text"
           >
-            <div class="empty-state" id="text-empty">
+            <div class="empty-state" role="presentation" id="text-empty">
               <svg
                 width="48"
                 height="48"
@@ -473,11 +558,10 @@
                 stroke-width="1"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                style="opacity: 0.4"
                 aria-hidden="true"
                 focusable="false"
               >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                <use href="#i-chat" />
               </svg>
               <p>Nothing shared yet</p>
               <p class="empty-sub">Type something above and click "Share Text"</p>
@@ -492,7 +576,7 @@
           role="tabpanel"
           aria-labelledby="tab-btn-clipboard"
           tabindex="0"
-          style="display: none"
+          hidden
         >
           <div class="clipboard-settings" id="clipboard-settings">
             <label class="toggle">
@@ -513,7 +597,7 @@
             aria-live="polite"
             aria-relevant="additions text"
           >
-            <div class="empty-state" id="clipboard-empty">
+            <div class="empty-state" role="presentation" id="clipboard-empty">
               <svg
                 width="48"
                 height="48"
@@ -523,14 +607,10 @@
                 stroke-width="1"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                style="opacity: 0.4"
                 aria-hidden="true"
                 focusable="false"
               >
-                <path
-                  d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
-                />
-                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                <use href="#i-clipboard" />
               </svg>
               <p>Clipboard is empty</p>
               <p class="empty-sub">Enable clipboard sync to share copied text across devices</p>
@@ -546,7 +626,7 @@
           role="tabpanel"
           aria-labelledby="tab-btn-devices"
           tabindex="0"
-          style="display: none"
+          hidden
         >
           <h2 class="sr-only">Devices</h2>
           <div
@@ -556,7 +636,7 @@
             aria-live="polite"
             aria-relevant="additions text"
           >
-            <div class="empty-state" id="device-empty">
+            <div class="empty-state" role="presentation" id="device-empty">
               <svg
                 width="48"
                 height="48"
@@ -566,13 +646,10 @@
                 stroke-width="1"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                style="opacity: 0.4"
                 aria-hidden="true"
                 focusable="false"
               >
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                <line x1="8" y1="21" x2="16" y2="21" />
-                <line x1="12" y1="17" x2="12" y2="21" />
+                <use href="#i-monitor" />
               </svg>
               <p>Only you here</p>
               <p class="empty-sub">Scan the QR code or open this URL on another device</p>
@@ -598,14 +675,7 @@
 
       <!-- Modals -->
       <!-- QR Modal -->
-      <div
-        id="qr-modal"
-        class="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="QR code"
-        style="display: none"
-      >
+      <div id="qr-modal" class="modal" role="dialog" aria-modal="true" aria-label="QR code" hidden>
         <div class="modal-backdrop"></div>
         <div class="modal-content modal-qr">
           <div class="modal-header">
@@ -622,8 +692,7 @@
                 aria-hidden="true"
                 focusable="false"
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+                <use href="#i-close" />
               </svg>
             </button>
           </div>
@@ -641,7 +710,7 @@
               <button class="btn btn-ghost btn-sm" id="copy-url-btn">Copy</button>
             </div>
             <label class="sr-only" for="qr-ip-select">IP address for the QR code</label>
-            <select id="qr-ip-select" class="select" style="margin-top: 12px"></select>
+            <select id="qr-ip-select" class="select mt-3"></select>
           </div>
         </div>
       </div>
@@ -653,7 +722,7 @@
         role="dialog"
         aria-modal="true"
         aria-label="File preview"
-        style="display: none"
+        hidden
       >
         <div class="modal-backdrop"></div>
         <div class="modal-content modal-preview">
@@ -674,8 +743,7 @@
                 aria-hidden="true"
                 focusable="false"
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+                <use href="#i-close" />
               </svg>
             </button>
           </div>
@@ -694,8 +762,7 @@
                 aria-hidden="true"
                 focusable="false"
               >
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                <use href="#i-alert" />
               </svg>
               Send to...
             </button>
@@ -712,9 +779,7 @@
                 aria-hidden="true"
                 focusable="false"
               >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
+                <use href="#i-download" />
               </svg>
               Download
             </button>
@@ -730,7 +795,7 @@
         role="dialog"
         aria-modal="true"
         aria-label="Incoming transfer"
-        style="display: none"
+        hidden
       >
         <div class="modal-backdrop"></div>
         <div class="modal-content modal-transfer">
@@ -755,12 +820,12 @@
         role="dialog"
         aria-modal="true"
         aria-label="Paste to share"
-        style="display: none"
+        hidden
       >
         <div class="modal-backdrop"></div>
         <div class="modal-content modal-sm">
           <div class="modal-header">
-            <h3 class="modal-title">Paste to Share</h3>
+            <h3 class="modal-title">Share this text?</h3>
             <button class="modal-close" aria-label="Close modal">
               <svg
                 width="18"
@@ -773,8 +838,7 @@
                 aria-hidden="true"
                 focusable="false"
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+                <use href="#i-close" />
               </svg>
             </button>
           </div>
@@ -785,7 +849,7 @@
               class="textarea"
               rows="6"
               maxlength="100000"
-              placeholder="Pasted text appears here…"
+              placeholder="Copied text appears here…"
             ></textarea>
           </div>
           <div class="modal-footer">
@@ -802,7 +866,7 @@
         role="dialog"
         aria-modal="true"
         aria-label="Keyboard shortcuts"
-        style="display: none"
+        hidden
       >
         <div class="modal-backdrop"></div>
         <div class="modal-content modal-shortcuts">
@@ -820,8 +884,7 @@
                 aria-hidden="true"
                 focusable="false"
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+                <use href="#i-close" />
               </svg>
             </button>
           </div>
@@ -901,7 +964,7 @@
         role="dialog"
         aria-modal="true"
         aria-label="Create new room"
-        style="display: none"
+        hidden
       >
         <div class="modal-backdrop"></div>
         <div class="modal-content modal-sm">
@@ -919,8 +982,7 @@
                 aria-hidden="true"
                 focusable="false"
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+                <use href="#i-close" />
               </svg>
             </button>
           </div>
@@ -929,25 +991,81 @@
             <input
               type="text"
               id="new-room-name"
+              name="name"
+              autocomplete="off"
               class="input"
-              placeholder="Optional name"
+              placeholder="Living room"
               maxlength="32"
             />
-            <label for="new-room-pin" class="form-label" style="margin-top: 12px"
-              >PIN (optional)</label
-            >
+            <label for="new-room-pin" class="form-label mt-3">PIN (optional)</label>
             <input
               type="password"
               id="new-room-pin"
+              name="pin"
+              autocomplete="off"
               class="input"
               placeholder="4-8 digits"
-              maxlength="8"
               inputmode="numeric"
               pattern="[0-9]*"
+              maxlength="8"
             />
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" data-close-modal>Create</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Room PIN prompt (spec 12): shown when a room-scoped request comes back
+           401 requiresRoomPin, i.e. the user opened a locked room they have no
+           PIN for yet. Without this the client had nowhere to ask, so the app
+           just sat on a "connection lost" overlay retrying forever. -->
+      <div
+        id="room-pin-modal"
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="room-pin-title"
+        hidden
+      >
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-sm">
+          <div class="modal-header">
+            <h3 class="modal-title" id="room-pin-title">This room is locked</h3>
+            <button class="modal-close" aria-label="Close modal">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <use href="#i-close" />
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p class="form-hint" id="room-pin-hint">Enter the PIN to open this room.</p>
+            <label for="room-pin-input" class="form-label">Room PIN</label>
+            <input
+              type="password"
+              id="room-pin-input"
+              class="input"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="8"
+              autocomplete="off"
+              placeholder="Enter PIN"
+            />
+            <p class="room-pin-error" id="room-pin-error" role="alert" hidden></p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" data-close-modal>Cancel</button>
+            <button class="btn btn-primary" id="room-pin-submit">Unlock</button>
           </div>
         </div>
       </div>
@@ -959,7 +1077,7 @@
         role="dialog"
         aria-modal="true"
         aria-label="Menu"
-        style="display: none"
+        hidden
       >
         <div class="bottom-sheet-backdrop"></div>
         <div class="bottom-sheet-panel">
@@ -978,29 +1096,34 @@
           <button id="sheet-settings-btn" class="bottom-sheet-item" type="button">Settings</button>
         </div>
       </div>
+    </div>
 
-      <!-- Reconnecting Banner -->
-      <div id="reconnect-banner" class="reconnect-banner" style="display: none" role="alert">
-        <span>Reconnecting...</span>
-        <div class="reconnect-progress"><div class="reconnect-progress-bar"></div></div>
-      </div>
+    <!-- Connection state UI.
+         Spec 13.9. These live OUTSIDE #app on purpose: while the connection is
+         lost the whole app shell is marked `inert`, and an overlay nested
+         inside the inert subtree would be unfocusable and unreachable. -->
+    <div id="reconnect-banner" class="reconnect-banner" hidden role="alert">
+      <span class="reconnect-spinner" aria-hidden="true"></span>
+      <span class="reconnect-label">Reconnecting...</span>
+    </div>
 
-      <!-- Disconnected Overlay -->
-      <div
-        id="disconnected-overlay"
-        class="disconnected-overlay"
-        style="display: none"
-        role="alert"
-      >
-        <div class="disconnected-content">
-          <!-- Spec 13.9: progress ring while the client auto-reconnects -->
-          <svg width="56" height="56" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-            <circle class="disconnected-ring-track" cx="24" cy="24" r="20" />
-            <circle class="disconnected-ring-head" cx="24" cy="24" r="20" />
-          </svg>
-          <h2>Connection lost</h2>
-          <p>Reconnecting in <span id="reconnect-timer">3</span>s...</p>
-        </div>
+    <div
+      id="disconnected-overlay"
+      class="disconnected-overlay"
+      hidden
+      role="alertdialog"
+      aria-modal="true"
+      tabindex="-1"
+      aria-labelledby="disconnected-title"
+      aria-describedby="disconnected-detail"
+    >
+      <div class="disconnected-content">
+        <!-- Spec 13.9: progress ring while the client auto-reconnects -->
+        <svg width="56" height="56" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <use href="#i-reconnect-ring" />
+        </svg>
+        <h2 id="disconnected-title">Connection lost</h2>
+        <p id="disconnected-detail">Reconnecting in <span id="reconnect-timer">3</span>s...</p>
       </div>
     </div>
 

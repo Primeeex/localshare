@@ -16,7 +16,6 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html"],
       include: ["src/**/*.js", "bin/**/*.js"],
-      exclude: ["src/middleware/rateLimit.js"],
       thresholds: {
         statements: 80,
         branches: 75,
