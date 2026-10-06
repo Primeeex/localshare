@@ -15,8 +15,6 @@ Share files, text, and clipboard between every device on your Wi-Fi, with one co
 |:---:|:---:|
 | ![LocalShare in light mode](docs/screenshots/demo-light.png) | ![LocalShare in dark mode](docs/screenshots/demo-dark.png) |
 
-_Real captures of the running app showing the file list, device presence cluster, and drop zone._
-
 ## Features
 
 - ✨ Drag-and-drop upload for single and multiple files
