@@ -111,15 +111,21 @@ export const deviceId = (() => {
  * device opening http://<lan-ip>:3000 (plain HTTP) it is `undefined` and this
  * module threw at import time, killing the whole app (no theme toggle, no
  * uploads - only the skip link rendered). `crypto.getRandomValues` works in
- * insecure contexts.
+ * insecure contexts. Also handles test environments (jsdom) where `crypto`
+ * may not be defined at all.
  */
 function randomId() {
-  if (typeof crypto.randomUUID === "function") {
+  const hasCrypto = typeof crypto === "object" && crypto !== null;
+  if (hasCrypto && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
   }
-  const bytes = new Uint8Array(12);
-  crypto.getRandomValues(bytes);
-  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  if (hasCrypto && typeof crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(12);
+    crypto.getRandomValues(bytes);
+    return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  // Last resort: Math.random() based (not cryptographically secure, but works in tests)
+  return Array.from({ length: 12 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
 }
 
 export let deviceName = readStorage(localStorage, "localshare:deviceName") || "";
