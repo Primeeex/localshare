@@ -28,6 +28,13 @@
 
 /** Live design-token lookup, so the canvas always matches the current theme. */
 const tokenCache = { theme: null, map: null };
+/** Registry of canvas instances that need theme-aware repaints. */
+const canvasRegistry = new Set();
+
+function registerCanvas(instance) {
+  canvasRegistry.add(instance);
+  return () => canvasRegistry.delete(instance);
+}
 
 function readTokens() {
   const theme = document.documentElement.dataset.theme || "system";
@@ -52,6 +59,32 @@ function readTokens() {
   tokenCache.map = map;
   return map;
 }
+
+/** Listen for theme changes and trigger repaints on all registered canvases. */
+function setupThemeChangeListener() {
+  if (typeof window === "undefined") return;
+  // Listen for theme attribute changes on the document element
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type === "attributes" && mutation.attributeName === "data-theme") {
+        // Invalidate token cache
+        tokenCache.theme = null;
+        tokenCache.map = null;
+        // Trigger repaint on all registered canvases
+        for (const instance of canvasRegistry) {
+          if (typeof instance.repaint === "function") {
+            instance.repaint();
+          }
+        }
+        break;
+      }
+    }
+  });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+}
+
+// Initialize theme change listener
+setupThemeChangeListener();
 
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -254,7 +287,7 @@ export function createDropField(canvas) {
 
   observer.observe(canvas);
 
-  return {
+  const instance = {
     /** @param {"active"|"rejected"} [next] */
     activate(next = "active") {
       mode = next;
@@ -269,6 +302,13 @@ export function createDropField(canvas) {
       observer.disconnect();
     },
   };
+  const unregister = registerCanvas(instance);
+  const originalDestroy = instance.destroy;
+  instance.destroy = () => {
+    unregister();
+    originalDestroy();
+  };
+  return instance;
 }
 
 // ===== 2. Presence cluster =====
@@ -360,12 +400,19 @@ export function createPresenceCluster(canvas, { getDevices, selfId }) {
   });
   observer.observe(canvas);
 
-  return {
+  const instance = {
     repaint,
     destroy() {
       observer.disconnect();
     },
   };
+  const unregister = registerCanvas(instance);
+  const originalDestroy = instance.destroy;
+  instance.destroy = () => {
+    unregister();
+    originalDestroy();
+  };
+  return instance;
 }
 
 // ===== 3. Upload throughput sparkline =====
@@ -437,10 +484,18 @@ export function createSparkline(canvas) {
   });
   observer.observe(canvas);
 
-  return {
+  const instance = {
     push,
+    repaint: draw,
     destroy() {
       observer.disconnect();
     },
   };
+  const unregister = registerCanvas(instance);
+  const originalDestroy = instance.destroy;
+  instance.destroy = () => {
+    unregister();
+    originalDestroy();
+  };
+  return instance;
 }

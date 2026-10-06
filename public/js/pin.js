@@ -10,6 +10,15 @@ const input = document.getElementById("pin-input");
 const error = document.getElementById("pin-error");
 const submit = document.getElementById("pin-submit");
 
+/** Safe localStorage helpers. */
+function safeGetItem(key, fallback = null) {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 applyStoredTheme();
 input.focus();
 
@@ -81,7 +90,7 @@ form.addEventListener("submit", async (event) => {
 });
 
 function applyStoredTheme() {
-  const theme = localStorage.getItem("localshare:theme") || "system";
+  const theme = safeGetItem("localshare:theme") || "system";
   document.documentElement.dataset.theme = theme;
   // Explicit light/dark pref overrides the static media-scoped theme-color metas
   if (theme !== "system") {

@@ -6,6 +6,10 @@
 import { escapeHtml, formatRelativeTime, copyText } from "./util.js";
 import { deviceId } from "./api.js";
 
+/** Shared observer for copy-on-view to avoid leaking one observer per entry. */
+let clipboardObserver = null;
+const observedEntries = new Map(); // entry element -> entry data
+
 /**
  * Render one clipboard entry.
  *
@@ -60,32 +64,53 @@ export function renderClipboardEntry(entry, actions = {}) {
 
   // Copy-on-view: when the row becomes visible, auto-copy if it is a
   // "newer than what we last copied" entry from another device.
+  // Uses a shared observer to avoid leaking observers when the list re-renders.
   if (entry.sharedBy !== deviceId) {
-    setupEntryObserver(el, entry);
+    observedEntries.set(el, entry);
+    ensureClipboardObserver();
   }
 
   return el;
+}
+
+/** Ensure the shared clipboard observer exists. */
+function ensureClipboardObserver() {
+  if (clipboardObserver) return;
+  clipboardObserver = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          const entry = observedEntries.get(e.target);
+          if (entry) {
+            autoCopy(entry);
+            observedEntries.delete(e.target);
+            clipboardObserver.unobserve(e.target);
+          }
+        }
+      }
+      // If no more entries to observe, disconnect the observer
+      if (observedEntries.size === 0) {
+        clipboardObserver.disconnect();
+        clipboardObserver = null;
+      }
+    },
+    { threshold: 0.6 }
+  );
+}
+
+/** Disconnect the shared observer and clear tracked entries. */
+export function clearClipboardObserver() {
+  if (clipboardObserver) {
+    clipboardObserver.disconnect();
+    clipboardObserver = null;
+  }
+  observedEntries.clear();
 }
 
 const syncedAt = new Map(); // entryId -> timestamp when we last put it on the local clipboard
 
 function markCopied(id) {
   syncedAt.set(id, Date.now());
-}
-
-function setupEntryObserver(el, entry) {
-  const observer = new IntersectionObserver(
-    (entries) => {
-      for (const e of entries) {
-        if (e.isIntersecting) {
-          autoCopy(entry);
-          observer.disconnect();
-        }
-      }
-    },
-    { threshold: 0.6 }
-  );
-  observer.observe(el);
 }
 
 async function autoCopy(entry) {
@@ -123,6 +148,18 @@ function markSynced(entryId) {
 }
 
 /**
+ * Safe localStorage helpers for clipboard sync.
+ * In private/incognito mode, localStorage access throws.
+ */
+function safeGetItem(key, fallback = null) {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
  * Wire up the clipboard sync toggle.
  *
  * The preference is persisted per device. Reading the system clipboard is only
@@ -135,7 +172,7 @@ export function setupClipboardSync() {
   if (!toggle) return;
 
   // Restore preference
-  const enabled = localStorage.getItem("localshare:clipboardSync") === "1";
+  const enabled = safeGetItem("localshare:clipboardSync") === "1";
   toggle.checked = enabled;
   toggle.dataset.enabled = enabled ? "1" : "0";
 }

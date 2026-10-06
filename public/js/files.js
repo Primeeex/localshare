@@ -20,12 +20,23 @@ import { openMenu } from "./menu.js";
 import { toast } from "./toast.js";
 import { icon } from "./icons.js";
 
+/** Safe localStorage helpers. */
+function safeGetItem(key, fallback = null) {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 /** Hours added by the "Extend +24h" action (spec 6.11). */
 const EXTEND_MS = 24 * 60 * 60 * 1000;
 /** Spec 6.20: notes are capped at 500 characters. */
 const NOTE_MAX = 500;
 /** Guard against a pathological filename typed into "Download as...". */
 const NAME_MAX = 200;
+/** Current preview file ID - used to ignore stale fetch responses. */
+let currentPreviewFileId = null;
 
 const TYPE_ICON_NAMES = {
   image: "image",
@@ -44,9 +55,7 @@ function iconFor(mimeType) {
 
 function currentRoom() {
   return (
-    new URLSearchParams(location.search).get("room") ||
-    localStorage.getItem("localshare:room") ||
-    "default"
+    new URLSearchParams(location.search).get("room") || safeGetItem("localshare:room") || "default"
   );
 }
 
@@ -68,6 +77,7 @@ export function renderFileRow(file, actions = {}) {
   const row = document.createElement("div");
   row.className = "file-row" + (actions.selected ? " selected" : "");
   row.setAttribute("role", "listitem");
+  row.setAttribute("tabindex", "0");
   row.dataset.fileId = file.id;
 
   const expiry = expiryLabel(file.expiresAt, file.pinned);
@@ -369,6 +379,10 @@ export function previewFile(file, roomId, actions = {}) {
   const delBtn = document.getElementById("preview-delete");
   const sendBtn = document.getElementById("preview-send");
 
+  // Guard against stale fetch responses: if another preview is opened while
+  // this one is loading, ignore this fetch's response.
+  currentPreviewFileId = file.id;
+
   nameEl.textContent = file.originalName;
   const type = typeLabel(file.mimeType);
   metaEl.textContent = `${formatBytes(file.size)} · ${type} · uploaded ${formatRelativeTime(file.uploadedAt)}`;
@@ -421,13 +435,18 @@ export function previewFile(file, roomId, actions = {}) {
       fetch(previewUrl)
         .then((r) => r.text())
         .then((text) => {
+          // Ignore stale response if preview was switched to another file
+          if (currentPreviewFileId !== file.id) return;
           const pre = document.createElement("pre");
           pre.textContent =
             text.length > 200000 ? text.slice(0, 200000) + "\n\n[preview truncated]" : text;
           content.innerHTML = "";
           content.appendChild(pre);
         })
-        .catch(() => unsupported("This file could not be displayed as text."));
+        .catch(() => {
+          if (currentPreviewFileId !== file.id) return;
+          unsupported("This file could not be displayed as text.");
+        });
     } else {
       unsupported("No preview available for this file type.");
     }

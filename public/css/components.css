@@ -1680,6 +1680,12 @@
   background: var(--color-bg-base);
   border-radius: var(--radius-lg);
   margin-top: var(--space-3);
+  /* WHY: the filename here is sender-controlled and can run to the full
+     filename length cap. Without a wrap rule one long unbroken name pushes
+     the modal wider than the viewport and the Accept/Decline buttons go with
+     it. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .transfer-message {

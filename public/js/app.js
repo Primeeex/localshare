@@ -9,11 +9,39 @@ import toast from "./toast.js";
 import { formatBytes, formatRelativeTime, copyText } from "./util.js";
 import { renderFileRow, previewFile } from "./files.js";
 import { renderTextEntry } from "./text.js";
-import { renderClipboardEntry, setupClipboardSync } from "./clipboard.js";
+import { renderClipboardEntry, setupClipboardSync, clearClipboardObserver } from "./clipboard.js";
 import { renderDeviceRow, avatarColors, hashIndex, deviceTypeIcon } from "./devices.js";
 import { openOverlay, closeAll, overlayOpen } from "./modals.js";
 import { openMenu, menuOpen } from "./menu.js";
 import { createDropField, createPresenceCluster, createSparkline } from "./canvas.js";
+
+// ===== Safe localStorage helpers =====
+// In private/incognito mode, localStorage access throws. These helpers
+// catch and swallow those errors, returning sensible defaults.
+function safeGetItem(key, fallback = null) {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+function safeSetItem(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore - private mode, quota exceeded, etc.
+  }
+}
+function safeRemoveItem(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore
+  }
+}
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 // ===== State =====
 const state = {
@@ -39,9 +67,6 @@ const state = {
   // fallback can never recurse into itself.
   notFoundHandled: false,
 };
-
-const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 // ===== Result helpers =====
 // Spec 1811: api.js never throws; every response is a Result. These two keep
@@ -115,7 +140,7 @@ async function boot() {
 
 async function startApp() {
   // Identify this device
-  const savedName = localStorage.getItem("localshare:deviceName");
+  const savedName = safeGetItem("localshare:deviceName");
   if (!savedName) {
     setDeviceName(generateDeviceName());
   } else {
@@ -128,7 +153,7 @@ async function startApp() {
   // user is never dropped into a shell full of failed requests.
   const params = new URLSearchParams(location.search);
   const urlRoom = params.get("room");
-  const wantedRoom = urlRoom || localStorage.getItem("localshare:room") || "default";
+  const wantedRoom = urlRoom || safeGetItem("localshare:room") || "default";
   state.roomId = "default";
 
   if (wantedRoom && wantedRoom !== "default") {
@@ -204,7 +229,7 @@ async function ensureRoomExists() {
   }
   toast.show(`Room "${state.roomId}" was not found. Redirecting to the default room.`, "error");
   state.roomId = "default";
-  localStorage.removeItem("localshare:room");
+  safeRemoveItem("localshare:room");
   history.replaceState({}, "", location.pathname);
 }
 
@@ -293,7 +318,7 @@ async function switchRoom(roomId) {
   // WHY: each room has its own PIN, so a room that was already asked for must
   // not suppress the prompt for the next one.
   state.pinPromptedFor = null;
-  localStorage.setItem("localshare:room", roomId);
+  safeSetItem("localshare:room", roomId);
   history.pushState({}, "", `?room=${encodeURIComponent(roomId)}`);
   $("#room-selector").value = roomId;
   const sheetSelect = $("#sheet-room-select");
@@ -302,6 +327,7 @@ async function switchRoom(roomId) {
   if (state.sse) state.sse.close();
   await connectSSE();
   await refreshAll();
+  await loadRooms();
   toast.show(`Switched to room "${roomId}"`, "info");
 }
 
@@ -334,7 +360,14 @@ function bindHeader() {
     closeModals();
     openQRModal();
   });
-  $("#sheet-room-select")?.addEventListener("change", (e) => switchRoom(e.target.value));
+  $("#sheet-room-select")?.addEventListener("change", (e) => {
+    // Use enterRoom so PIN-gated rooms prompt before switching
+    enterRoom(e.target.value).then((entered) => {
+      // Keep the selector honest: if we did not move, show where we really are.
+      const sheetSelect = $("#sheet-room-select");
+      if (sheetSelect && !entered) sheetSelect.value = state.roomId;
+    });
+  });
   $("#sheet-settings-btn")?.addEventListener("click", () => {
     closeModals();
     activateTab("clipboard");
@@ -794,7 +827,7 @@ function handleListError(kind, err) {
     refreshingRoom = true;
     toast.show(`Room "${state.roomId}" was not found. Returning to the default room.`, "error");
     state.roomId = "default";
-    localStorage.removeItem("localshare:room");
+    safeRemoveItem("localshare:room");
     history.replaceState(null, "", location.pathname);
     loadRooms().finally(() => {
       refreshingRoom = false;
@@ -857,12 +890,22 @@ function removeFile(fileId) {
 }
 
 let renderedFileIds = new Set();
+let fileSentinelObserver = null;
 
 function renderFiles() {
   const list = $("#file-list");
   const empty = $("#file-empty");
   const dlBtn = $("#download-all-btn");
   if (!list) return;
+
+  // Clean up any existing sentinel observer from a previous render to prevent
+  // memory leaks when the list is re-rendered before the sentinel intersects.
+  if (fileSentinelObserver) {
+    fileSentinelObserver.disconnect();
+    fileSentinelObserver = null;
+  }
+  const existingSentinel = list.querySelector(".file-sentinel");
+  if (existingSentinel) existingSentinel.remove();
 
   // The file row holds the keyboard focus while the list is rebuilt (j/k
   // navigation, Enter to preview). Rebuilding destroys that element, so focus
@@ -940,14 +983,15 @@ function renderFiles() {
         sentinel.className = "file-sentinel";
         sentinel.setAttribute("role", "presentation");
         list.appendChild(sentinel);
-        const io = new IntersectionObserver((entries) => {
+        fileSentinelObserver = new IntersectionObserver((entries) => {
           if (entries.some((e) => e.isIntersecting)) {
-            io.disconnect();
+            fileSentinelObserver.disconnect();
+            fileSentinelObserver = null;
             sentinel.remove();
             renderChunk();
           }
         });
-        io.observe(sentinel);
+        fileSentinelObserver.observe(sentinel);
       }
     };
 
@@ -1527,6 +1571,8 @@ function renderClipboards() {
   const empty = $("#clipboard-empty");
   if (!list) return;
   withLiveSuppressed(list, () => {
+    // Clear shared clipboard observer to prevent leaks when list is re-rendered
+    clearClipboardObserver();
     Array.from(list.querySelectorAll(".text-entry")).forEach((el) => el.remove());
     if (state.clipboardEntries.length === 0) {
       empty.hidden = false;
@@ -1771,6 +1817,7 @@ function bindModals() {
   document.addEventListener("click", (e) => {
     if (e.target.classList.contains("modal-backdrop")) closeModals();
     if (e.target.closest(".modal-close")) closeModals();
+    if (e.target.closest("[data-close-modal]")) closeModals();
   });
 }
 
@@ -1978,7 +2025,7 @@ function effectiveTheme(theme) {
 }
 
 function applyStoredTheme() {
-  const theme = localStorage.getItem("localshare:theme") || "system";
+  const theme = safeGetItem("localshare:theme") || "system";
   document.documentElement.dataset.theme = theme;
   updateThemeIcon(theme);
   syncThemeColor(theme);
@@ -1992,7 +2039,7 @@ function toggleTheme() {
   const current = document.documentElement.dataset.theme || "system";
   const next = THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length];
   document.documentElement.dataset.theme = next;
-  localStorage.setItem("localshare:theme", next);
+  safeSetItem("localshare:theme", next);
   updateThemeIcon(next);
   syncThemeColor(next);
   popThemeIcon();
@@ -2230,6 +2277,8 @@ function bindKeyboard() {
   document.addEventListener("keydown", (e) => {
     // Popover menus own the keyboard while open (spec 6.19 device picker)
     if (menuOpen()) return;
+    // Ignore when any modal/overlay is open (WCAG 2.4.3 focus trap)
+    if (overlayOpen()) return;
     // Ignore when typing in inputs
     const tag = e.target.tagName;
     const typing =
