@@ -643,7 +643,7 @@ async function refreshAll() {
 // and ask for the PIN instead.
 
 /** Guards against stacking the prompt when several 401s land at once. */
-let pinPromptOpen = false;
+let pinPromptPromise = null;
 
 /**
  * Show a message in the PIN dialog and shake it once.
@@ -667,13 +667,16 @@ function setPinError(el, message) {
  * @returns {Promise<boolean>} true when the room was unlocked
  */
 function promptForRoomPin(roomId) {
-  if (pinPromptOpen) return Promise.resolve(false);
+  // WHY join the running prompt instead of resolving false: the four parallel
+  // room GETs can all 401 at once. Returning `false` for "already open" made
+  // the caller treat it as a dismissal and clear state.pinPromptedFor, which
+  // defeats the one-prompt-per-room guard precisely when several 401s land.
+  if (pinPromptPromise) return pinPromptPromise;
   const modal = $("#room-pin-modal");
   const input = $("#room-pin-input");
   const errorEl = $("#room-pin-error");
   if (!modal || !input) return Promise.resolve(false);
 
-  pinPromptOpen = true;
   // The overlay is redundant while we are asking for a PIN: the modal IS the
   // conversation with the user, so the "connection lost" screen would sit on
   // top of the one control that could actually fix it.
@@ -692,12 +695,12 @@ function promptForRoomPin(roomId) {
   }
   input.value = "";
 
-  return new Promise((resolve) => {
+  const pending = new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
       if (settled) return;
       settled = true;
-      pinPromptOpen = false;
+      pinPromptPromise = null;
       input.removeEventListener("keydown", onKey);
       $("#room-pin-submit")?.removeEventListener("click", onSubmit);
       // WHY document, not the modal: modals.js dispatches the close event on
@@ -762,6 +765,8 @@ function promptForRoomPin(roomId) {
     document.addEventListener("localshare:overlays-closed", onClosed);
     input.focus();
   });
+  pinPromptPromise = pending;
+  return pending;
 }
 
 /**
