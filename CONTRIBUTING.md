@@ -86,7 +86,7 @@ Example: `feat/qr-code-shorturl`.
 
 **Never open a public issue for a security vulnerability.**
 
-1. Email **security@localshare.dev** first, or use [GitHub Security Advisories](https://github.com/Primeeex/localshare/security/advisories/new) to report the issue privately.
+1. Email **support@preonic.me** first, or use [GitHub Security Advisories](https://github.com/Primeeex/localshare/security/advisories/new) to report the issue privately.
 2. Include the affected version, reproduction steps, and the potential impact.
 3. Give us a reasonable time to investigate and release a fix before any public disclosure.
 
