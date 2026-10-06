@@ -1899,8 +1899,14 @@ function drawQR(text) {
 
 // ===== Transfers =====
 function showTransferModal(transfer) {
-  $("#transfer-message").textContent = `${transfer.sourceDeviceName} wants to send you a file.`;
-  $("#transfer-file-info").textContent = `Transfer expires in 60 seconds.`;
+  const who = transfer.sourceDeviceName || "Someone";
+  const name = transfer.originalName || "a file";
+  // Spec 6.19: "[QuickFox] wants to send you: photo.jpg (2.3 MB)."
+  // WHY the split: originalName is attacker-controlled and is rendered through
+  // textContent, never innerHTML.
+  $("#transfer-message").textContent = `${who} wants to send you:`;
+  const size = Number.isFinite(transfer.size) ? ` (${formatBytes(transfer.size)})` : "";
+  $("#transfer-file-info").textContent = `${name}${size}. Expires in 60 seconds.`;
   openModal("#transfer-modal");
 
   const accept = $("#transfer-accept");
@@ -1920,8 +1926,13 @@ function showTransferModal(transfer) {
       }
       closeModals();
       if (decision === "accept") {
-        toast.show("Download starting…", "success");
-        window.location.href = API.transferUrl(state.roomId, transfer.id);
+        toast.show("Transfer accepted. Preparing download...", "success");
+        // WHY the query param: this is a top-level navigation, not a fetch, so
+        // it cannot carry the X-Device-Id header the server checks. Without it
+        // the accepted transfer immediately 403s with "Access denied".
+        window.location.href = `${API.transferUrl(state.roomId, transfer.id)}?deviceId=${encodeURIComponent(
+          deviceId
+        )}`;
       } else {
         toast.show("Transfer declined", "info");
       }

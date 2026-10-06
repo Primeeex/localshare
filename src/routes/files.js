@@ -35,9 +35,17 @@ const INLINE_SAFE_MIME =
  * @param {string} name
  * @returns {string}
  */
-function encodeRFC5987(name) {
+export function encodeRFC5987(name) {
   const ascii = name.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
-  return `filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+  // WHY the extra escaping: encodeURIComponent leaves !'()* unescaped, and RFC
+  // 5987 attr-char excludes ' ( ) and *. An unescaped quote in particular
+  // terminates the filename* value early, so everything after it is parsed as
+  // garbage or dropped.
+  const encoded = encodeURIComponent(name).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+  return `filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
 /**

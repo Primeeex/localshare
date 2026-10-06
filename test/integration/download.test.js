@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { createTestApp } from "../helpers/app.js";
+import { encodeRFC5987 } from "../../src/routes/files.js";
 
 const CONTENT = "the quick brown fox jumps over the lazy dog";
 
@@ -270,5 +271,38 @@ describe("download", () => {
       .send({ note: "x" });
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe("FILE_NOT_FOUND");
+  });
+});
+
+describe("encodeRFC5987", () => {
+  it("cannot be broken out of by a quote in the filename", () => {
+    // A raw `"` here would terminate the filename= parameter early and let an
+    // attacker append parameters of their own.
+    const header = encodeRFC5987('evil"; filename="pwned.txt');
+    expect(header).toBe(
+      "filename=\"evil_; filename=_pwned.txt\"; filename*=UTF-8''evil%22%3B%20filename%3D%22pwned.txt"
+    );
+    // Exactly one real parameter boundary.
+    expect(header.match(/filename="/g)).toHaveLength(1);
+  });
+
+  it("escapes the RFC 5987 attr-chars encodeURIComponent leaves raw", () => {
+    // encodeURIComponent does not escape !'()* but RFC 5987 excludes ' ( ) *
+    // -- an unescaped quote terminates the filename* value early.
+    const header = encodeRFC5987("it's (fine)*.txt");
+    expect(header).toContain("filename*=UTF-8''it%27s%20%28fine%29%2A.txt");
+    expect(header).not.toContain("filename*=UTF-8''it's");
+  });
+
+  it("keeps the ASCII fallback printable", () => {
+    const header = encodeRFC5987("rapport été (日本).txt");
+    const ascii = /filename="([^"]*)"/.exec(header)[1];
+    expect(ascii).toMatch(/^[\x20-\x7e]*$/);
+  });
+
+  it("strips CR and LF so a name cannot split the response", () => {
+    const header = encodeRFC5987("a\r\nX-Injected: 1.txt");
+    expect(header).not.toContain("\r");
+    expect(header).not.toContain("\n");
   });
 });

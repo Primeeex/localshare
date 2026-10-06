@@ -23,9 +23,29 @@ export function rateLimit(options = {}) {
   // WHY: in-memory store is sufficient for single-process LocalShare
   const store = new Map();
 
+  // WHY the sweep: nothing ever removed a key, so every distinct source IP
+  // that ever touched the API stayed resident for the lifetime of the process.
+  // On a hostile network that is a slow memory leak with no way to recover --
+  // spec 19 caps the server at 50MB RSS. Sweeping on a request count rather
+  // than a timer avoids a handle per limiter (the app builds several, and the
+  // test suite builds one per app) and still bounds the store.
+  const SWEEP_EVERY = 1000;
+  let requestsSinceSweep = 0;
+  function sweepExpired(now) {
+    for (const [key, value] of store) {
+      if (now > value.resetAt) store.delete(key);
+    }
+  }
+
   return (req, res, next) => {
     const key = keyGenerator(req);
     const now = Date.now();
+
+    if (++requestsSinceSweep >= SWEEP_EVERY) {
+      requestsSinceSweep = 0;
+      sweepExpired(now);
+    }
+
     const record = store.get(key) || { count: 0, resetAt: now + windowMs };
 
     // Reset if window has expired

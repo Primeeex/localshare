@@ -311,6 +311,61 @@ describe("rooms", () => {
       expect(rooms.getTransfer("default", transfer.id).status).toBe("accepted");
     });
 
+    it("does NOT delete the room file when a transfer is declined", () => {
+      // THE data-loss bug: decline used to call storage.deleteFile() on the
+      // sender's POOLED file, so declining an offer to receive a file destroyed
+      // it for every device in the room.
+      const deleted = [];
+      rooms.storage = { deleteFile: async (roomId, fileId) => deleted.push(fileId) };
+      const transfer = rooms.createTransfer("default", {
+        fileId: "precious",
+        sourceDeviceId: "a",
+        sourceDeviceName: "A",
+        targetDeviceId: "b",
+      });
+      rooms.handleTransfer("default", transfer.id, "decline");
+      expect(deleted).toEqual([]);
+    });
+
+    it("does NOT delete the room file when a transfer EXPIRES unanswered", () => {
+      // The same data-loss bug on the most common path: the 60s TTL timer fires
+      // whenever a recipient does not answer in time (walk away, lock the phone,
+      // lose connection), and it deleted the sender's pooled file. Verified
+      // live: files 1 -> 0 with a 404 on the original after 68s.
+      const deleted = [];
+      rooms.storage = { deleteFile: async (roomId, fileId) => deleted.push(fileId) };
+      const transfer = rooms.createTransfer("default", {
+        fileId: "unanswered",
+        sourceDeviceId: "a",
+        sourceDeviceName: "A",
+        targetDeviceId: "b",
+      });
+      rooms._expireTransfer("default", transfer.id);
+      expect(deleted).toEqual([]);
+      // The entry is still reaped, so the map cannot grow unbounded.
+      expect(rooms.getTransfer("default", transfer.id)).toBeNull();
+    });
+
+    it("refuses an accept or decline from a device that is not the target", () => {
+      const transfer = rooms.createTransfer("default", {
+        fileId: "f1",
+        sourceDeviceId: "a",
+        sourceDeviceName: "A",
+        targetDeviceId: "target",
+      });
+      expect(
+        catchErr(() => rooms.handleTransfer("default", transfer.id, "decline", "nosy"))
+      ).toMatchObject({
+        code: "FORBIDDEN",
+        status: 403,
+      });
+      // Still pending, so the real target can still answer.
+      expect(rooms.getTransfer("default", transfer.id).status).toBe("pending");
+      expect(rooms.handleTransfer("default", transfer.id, "accept", "target").status).toBe(
+        "accepted"
+      );
+    });
+
     it("declines a pending transfer", () => {
       const transfer = rooms.createTransfer("default", {
         fileId: "f1",

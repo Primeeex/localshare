@@ -322,6 +322,12 @@ export class RoomManager {
       id: transferId,
       roomId,
       fileId: transfer.fileId,
+      // WHY denormalised: the receiving modal must name the file and its size
+      // (spec 6.19), and it renders purely from the SSE payload -- there is no
+      // room to look the metadata up on the target device.
+      originalName: transfer.originalName ?? null,
+      size: transfer.size ?? null,
+      mimeType: transfer.mimeType ?? null,
       sourceDeviceId: transfer.sourceDeviceId,
       sourceDeviceName: transfer.sourceDeviceName,
       targetDeviceId: transfer.targetDeviceId,
@@ -344,9 +350,13 @@ export class RoomManager {
    * @param {string} roomId
    * @param {string} transferId
    * @param {string} action - 'accept' | 'decline'
+   * @param {string} [actorDeviceId] - The device answering. When supplied it
+   *   must be the transfer's target: a transfer is a private offer, and
+   *   without this check any device in the room could decline it and rob the
+   *   intended recipient of the file.
    * @returns {Object}
    */
-  handleTransfer(roomId, transferId, action) {
+  handleTransfer(roomId, transferId, action, actorDeviceId) {
     const transferMap = this.transfers.get(roomId);
     if (!transferMap || !transferMap.has(transferId)) {
       throw Object.assign(new Error("Transfer not found"), {
@@ -361,16 +371,25 @@ export class RoomManager {
         status: 410,
       });
     }
+    if (actorDeviceId && actorDeviceId !== transfer.targetDeviceId) {
+      throw Object.assign(new Error("Access denied"), {
+        code: "FORBIDDEN",
+        status: 403,
+      });
+    }
     // WHY: keep the entry in the map so the target can still download it
     // until the TTL sweep removes it
     transfer.status = action === "accept" ? "accepted" : "declined";
     transfer.handledAt = new Date().toISOString();
     const eventType = action === "accept" ? "transfer:accepted" : "transfer:declined";
     this.sse.broadcastToDevice(roomId, transfer.sourceDeviceId, eventType, { transferId });
-    if (action === "decline") {
-      // Delete the file since it was declined
-      this.storage.deleteFile(roomId, transfer.fileId).catch(() => {});
-    }
+    // WHY no deletion here: spec 6.19 says a declined transfer is "deleted",
+    // but that refers to the copy the server stages in its temporary
+    // "pending transfers" area. This implementation never stages one - the
+    // client sends a file that is already in the room's shared pool - so
+    // `transfer.fileId` is the sender's real, pooled file. Deleting it here
+    // destroyed the original for every device in the room: declining an offer
+    // to receive a file silently wiped it out of existence.
     return transfer;
   }
 
@@ -388,7 +407,12 @@ export class RoomManager {
       this.sse.broadcastToDevice(roomId, transfer.sourceDeviceId, "transfer:expired", {
         transferId,
       });
-      this.storage.deleteFile(roomId, transfer.fileId).catch(() => {});
+      // WHY no deletion here, same as on decline: `transfer.fileId` is a file
+      // already in the room's shared pool, not a staged copy. This timer fires
+      // whenever a recipient simply does not answer within 60s - walk away,
+      // lock the phone, lose connection - and deleting here made the sender's
+      // file vanish from the room for everyone. Expiring an offer must cost
+      // the recipient nothing and the sender nothing.
     }
     transferMap.delete(transferId);
   }

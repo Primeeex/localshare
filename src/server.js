@@ -33,12 +33,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * @returns {{ app: import('express').Express, start: (port: number) => Promise<void>, stop: () => void }}
  */
 /**
- * Strip a room PIN out of a URL before it reaches the logs.
+ * Strip query values that must not reach the logs.
+ *
+ * `roomPin` is a credential. `deviceId` is not, but the transfer download
+ * accepts it as a query fallback (a top-level navigation cannot set headers),
+ * so it is redacted here too rather than scattering device ids through logs.
  * @param {string} url
  * @returns {string}
  */
-function redactRoomPin(url) {
-  return String(url).replace(/([?&]roomPin=)[^&]*/gi, "$1[redacted]");
+function redactSensitiveQuery(url) {
+  return String(url)
+    .replace(/([?&]roomPin=)[^&]*/gi, "$1[redacted]")
+    .replace(/([?&]deviceId=)[^&]*/gi, "$1[redacted]");
 }
 export function createApp(config, storage, rooms, sse, logger, networkInfo) {
   const app = express();
@@ -172,7 +178,7 @@ export function createApp(config, storage, rooms, sse, logger, networkInfo) {
           // ride in the query string. Logged verbatim it wrote every room PIN
           // in cleartext into the access log -- and the same URL also lands in
           // browser history and any reverse proxy's log ahead of us.
-          url: redactRoomPin(req.originalUrl),
+          url: redactSensitiveQuery(req.originalUrl),
           status: res.statusCode,
           duration,
           reqId: req.id,
